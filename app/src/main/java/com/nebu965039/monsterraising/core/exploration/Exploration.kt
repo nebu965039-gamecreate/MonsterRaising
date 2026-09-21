@@ -43,6 +43,10 @@ data class ExplorationConfig(
     val friendExtraSlots: Int = 2,
     /** ログイン時に付与するポイント(8.2節: 1 日 1 回 100 ポイント) */
     val loginBonus: Int = 100,
+    /** ログイン時に補充するごはんの数(1 日 1 回。3 個。満腹度は 1 個で +25、1 日で約 144 減る) */
+    val loginRice: Int = 3,
+    /** はじめて始めたときにプレゼントするごはんの数(10 個) */
+    val startingRice: Int = 10,
     /** 排出確率(8.3節)。ノーマル(ごはん)、レア(ミニゲーム券)、かなりレア(装備)、超レア(長寿の秘薬)の順に累積して抽選する */
     val normalRate: Double = 0.915,
     val rareRate: Double = 0.05,
@@ -74,6 +78,8 @@ data class ExplorationState(
     val actives: List<ActiveExploration> = emptyList(),
     /** ログインボーナスを最後に受け取った日(日付の通し番号) */
     val loginBonusDay: Long = -1L,
+    /** はじめてのプレゼント(ごはん)を受け取り済みか */
+    val startingGiftGiven: Boolean = false,
 )
 
 /** 探索の状況。 */
@@ -220,11 +226,20 @@ object Exploration {
             ExplorationStatus.InProgress(a.site, a.plan, a.endsAtMs - nowMs)
         }
 
-    /** ログインボーナス(8.2節: 1 日 1 回 100 ポイント)。受け取れたら true。 */
+    /** はじめて始めたときのプレゼント(ごはん 10 個)。一度だけ受け取れる。受け取れたら true。 */
+    fun claimStartingGift(progress: MiniGameProgress, config: ExplorationConfig = ExplorationConfig()): Pair<MiniGameProgress, Boolean> {
+        if (progress.exploration.startingGiftGiven) return progress to false
+        return progress.copy(
+            inventory = progress.inventory.add(ItemType.RICE, config.startingRice),
+            exploration = progress.exploration.copy(startingGiftGiven = true),
+        ) to true
+    }
+
+    /** ログインボーナス(8.2節: 1 日 1 回、探索ポイント 100 とごはん 3 個)。受け取れたら true。 */
     fun claimLoginBonus(progress: MiniGameProgress, day: Long, config: ExplorationConfig = ExplorationConfig()): Pair<MiniGameProgress, Boolean> {
         if (progress.exploration.loginBonusDay == day) return progress to false
         return progress.copy(
-            inventory = progress.inventory.addPoints(config.loginBonus),
+            inventory = progress.inventory.addPoints(config.loginBonus).add(ItemType.RICE, config.loginRice),
             exploration = progress.exploration.copy(loginBonusDay = day),
         ) to true
     }

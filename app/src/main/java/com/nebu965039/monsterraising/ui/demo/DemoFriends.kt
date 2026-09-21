@@ -1,6 +1,7 @@
 package com.nebu965039.monsterraising.ui.demo
 
 import androidx.compose.runtime.getValue
+import com.nebu965039.monsterraising.core.friends.Friend
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
@@ -10,4 +11,15 @@ import androidx.compose.runtime.setValue
  */
 object DemoFriends {
     var hasFriends by mutableStateOf(false)
+
+    /** 動作確認用の仮のフレンド(フレンドがいる設定のときだけ) */
+    fun friends(nowMs: Long): List<Friend> =
+        if (!hasFriends) {
+            emptyList()
+        } else {
+            listOf(
+                Friend("demo-a", "テストフレンドA", nowMs - 2 * 3_600_000L),
+                Friend("demo-b", "テストフレンドB", nowMs - 26 * 3_600_000L),
+            )
+        }
 }

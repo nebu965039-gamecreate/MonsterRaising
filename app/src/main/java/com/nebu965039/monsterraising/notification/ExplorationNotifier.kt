@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import com.nebu965039.monsterraising.MainActivity
 import com.nebu965039.monsterraising.R
 import com.nebu965039.monsterraising.core.exploration.ExplorationSite
+import com.nebu965039.monsterraising.data.settingsStore
 
 /** 探索が完了したときの通知(基本設計書8.6節)。 */
 object ExplorationNotifier {
@@ -29,6 +30,8 @@ object ExplorationNotifier {
 
     /** 拠点ごとに通知を出す(通知の ID は拠点ごとに別なので、複数の拠点が同時に終わっても並ぶ)。 */
     fun notifyFinished(context: Context, site: ExplorationSite) {
+        // 設定画面で「探索が終わったときに通知する」がオフなら出さない
+        if (!settingsStore(context).load().notifyExploration) return
         // Android 13 以降は、通知の許可がなければ出さない(lint が読み取れるよう、呼び出しの直前で確認する)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

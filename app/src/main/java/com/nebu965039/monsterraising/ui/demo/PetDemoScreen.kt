@@ -39,7 +39,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.nebu965039.monsterraising.core.care.CareSession
 import com.nebu965039.monsterraising.core.exploration.Exploration
+import com.nebu965039.monsterraising.core.minigame.ItemType
 import com.nebu965039.monsterraising.core.pet.DeathCause
 import com.nebu965039.monsterraising.core.pet.PetAppearance
 import com.nebu965039.monsterraising.core.pet.PetConfig
@@ -49,6 +51,7 @@ import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.ui.care.CareStage
 import com.nebu965039.monsterraising.ui.common.label
 import com.nebu965039.monsterraising.widget.PetWidgetUpdater
 import com.nebu965039.monsterraising.ui.sprite.LoadedSprite
@@ -108,11 +111,15 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
     // 探索中の状況(8.6節)。前面に戻ったとき・5 秒ごとに読み直す
     val progressStore = remember { MiniGameStore(context) }
     var exploreTick by remember { mutableIntStateOf(0) }
+    // ごはんの数(餌やりで消費する。10.2.1節)。前面に戻ったときにも読み直す
+    var care by remember { mutableStateOf(progressStore.load()) }
+    LaunchedEffect(resumeTick) { care = progressStore.load() }
     LaunchedEffect(Unit) {
         while (true) {
             delay(5_000)
             commit { PetSimulator.advance(it, now(), config) }
             exploreTick++
+            care = progressStore.load()
         }
     }
     val overview = remember(resumeTick, exploreTick, DemoClock.offsetMs) { Exploration.overview(progressStore.load(), now()) }
@@ -145,14 +152,35 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
             return@Column
         }
         val base = PetAppearance.baseAnimation(pet.stats, config)
-        BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            val availablePx = with(LocalDensity.current) { (maxWidth * 0.6f).roundToPx() }
-            val offscreenPx = with(LocalDensity.current) { maxWidth.toPx() }
+        // メイン画面のお世話操作(10.2節): なでる(キャラクターをタップ)・餌やり(ごはんをドラッグ&ドロップ)・掃除(汚れをなでる)
+        CareStage(
+            isEgg = pet.stage == Stage.EGG,
+            riceCount = care.inventory.count(ItemType.RICE),
+            cleanliness = pet.stats.cleanliness,
+            field = CareSession.stainField,
+            onFeed = {
+                val consumed = progressStore.update { p ->
+                    val inventory = p.inventory.consume(ItemType.RICE)
+                    if (inventory == null) p to false else p.copy(inventory = inventory) to true
+                }
+                care = progressStore.load()
+                if (consumed) {
+                    commit { PetSimulator.feed(it, now(), config.feedGain, config) }
+                    play("eat")
+                }
+            },
+            onPet = {
+                commit { PetSimulator.pet(it, now(), config) }
+                play("happy")
+            },
+            onStainCleaned = {
+                commit { PetSimulator.clean(it, now(), config.cleanGainPerStain, config) }
+                pet.stats.cleanliness
+            },
+        ) { scale, widthPx ->
             val arriving = exploring && comeBack.value > 0f
-            val scale = SpriteTimeline.integerScale(availablePx, loaded.definition.size)
-            Box(Modifier.background(Color(0xFFC8DCC8))) {
-                // 戻ってくる間は、左向き(進行方向)にして歩く
-                Box(Modifier.graphicsLayer { translationX = comeBack.value * offscreenPx; scaleX = if (arriving) -1f else 1f }) {
+            // 戻ってくる間は、左向き(進行方向)にして歩く
+            Box(Modifier.graphicsLayer { translationX = comeBack.value * widthPx; scaleX = if (arriving) -1f else 1f }) {
                 key(shotToken) {
                     SpritePlayer(
                         loaded,
@@ -160,7 +188,6 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
                         scale = scale,
                         onFrameChanged = { if (oneShot != null && it.animation == "idle") oneShot = null },
                     )
-                }
                 }
             }
         }
@@ -201,7 +228,7 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
             Button(enabled = !isEgg, onClick = {
                 commit { PetSimulator.feed(it, now(), config.feedGain, config) }
                 play("eat")
-            }) { Text("餌(+${config.feedGain.toInt()})") }
+            }) { Text("餌(デモ・ごはん消費なし +${config.feedGain.toInt()})") }
             Button(enabled = !isEgg, onClick = { commit { PetSimulator.clean(it, now(), config.cleanGainPerStain, config) } }) {
                 Text("掃除(+${config.cleanGainPerStain.toInt()})")
             }
