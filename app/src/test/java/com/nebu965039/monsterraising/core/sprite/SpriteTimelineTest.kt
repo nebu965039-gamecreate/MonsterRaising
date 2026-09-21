@@ -53,6 +53,27 @@ class SpriteTimelineTest {
     }
 
     @Test
+    fun stepOffsets_areCarriedToFrame() {
+        val bob = SpriteDefinitionParser.parse(
+            """
+            {
+              "id": "t", "size": 48, "frames": { "a": "a.png" },
+              "animations": {
+                "idle": { "steps": [ { "frame": "a", "ms": 100 }, { "frame": "a", "ms": 100, "dx": 1, "dy": -1 } ] }
+              }
+            }
+            """.trimIndent(),
+        )
+        val rest = SpriteTimeline.resolve(bob, "idle", 0)
+        assertEquals(0, rest.dx)
+        assertEquals(0, rest.dy)
+        val up = SpriteTimeline.resolve(bob, "idle", 100)
+        assertEquals(1, up.dx)
+        assertEquals(-1, up.dy)
+        assertEquals(-1, SpriteTimeline.resolve(bob, "idle", 300).dy) // 周回後も同じ位相
+    }
+
+    @Test
     fun negativeElapsed_isTreatedAsZero() {
         assertEquals("a", SpriteTimeline.resolve(def, "idle", -50).frameKey)
     }

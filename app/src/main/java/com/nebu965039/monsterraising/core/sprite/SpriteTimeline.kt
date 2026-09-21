@@ -7,6 +7,9 @@ data class SpriteFrame(
     val frameKey: String,
     /** 非ループで最終フレームに到達し、以降は保持される状態 */
     val finished: Boolean,
+    /** 表示位置のずらし量(元画像のピクセル単位) */
+    val dx: Int = 0,
+    val dy: Int = 0,
 )
 
 object SpriteTimeline {
@@ -21,16 +24,19 @@ object SpriteTimeline {
             val anim = def.animations[name] ?: throw IllegalArgumentException("unknown animation: $name")
             val total = anim.steps.sumOf { it.ms }
             if (anim.loop) {
-                return SpriteFrame(name, stepAt(anim, remaining % total).frame, finished = false)
+                return frameOf(name, stepAt(anim, remaining % total), finished = false)
             }
             if (remaining < total) {
-                return SpriteFrame(name, stepAt(anim, remaining).frame, finished = false)
+                return frameOf(name, stepAt(anim, remaining), finished = false)
             }
-            val next = anim.next ?: return SpriteFrame(name, anim.steps.last().frame, finished = true)
+            val next = anim.next ?: return frameOf(name, anim.steps.last(), finished = true)
             remaining -= total
             name = next
         }
     }
+
+    private fun frameOf(animation: String, step: Step, finished: Boolean) =
+        SpriteFrame(animation, step.frame, finished, step.dx, step.dy)
 
     private fun stepAt(anim: AnimationDef, offsetMs: Long): Step {
         var acc = 0L

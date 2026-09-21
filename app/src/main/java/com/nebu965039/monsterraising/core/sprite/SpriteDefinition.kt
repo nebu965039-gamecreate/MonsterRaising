@@ -23,7 +23,13 @@ data class AnimationDef(
 )
 
 @Serializable
-data class Step(val frame: String, val ms: Long) {
+data class Step(
+    val frame: String,
+    val ms: Long,
+    /** 表示位置のずらし量(元画像のピクセル単位。+x=右、+y=下)。呼吸のような微小な揺れ用 */
+    val dx: Int = 0,
+    val dy: Int = 0,
+) {
     init {
         require(ms > 0) { "ms must be positive: $ms" }
     }

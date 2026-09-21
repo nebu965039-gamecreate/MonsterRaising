@@ -17,7 +17,7 @@
       "loop": true,
       "steps": [
         { "frame": "normal", "ms": 700 },
-        { "frame": "walk", "ms": 250 }
+        { "frame": "normal", "ms": 700, "dy": -1 }
       ]
     },
     "walk": {

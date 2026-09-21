@@ -54,7 +54,7 @@ fun SpritePlayer(
             image = image,
             srcOffset = IntOffset.Zero,
             srcSize = IntSize(image.width, image.height),
-            dstOffset = IntOffset.Zero,
+            dstOffset = IntOffset(frame.dx * scale, frame.dy * scale),
             dstSize = IntSize(px, px),
             filterQuality = FilterQuality.None,
         )
