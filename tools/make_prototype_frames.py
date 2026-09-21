@@ -25,6 +25,42 @@ def idle_up(normal: Image.Image) -> Image.Image:
     out.paste(normal.crop((0, IDLE_BODY_BOTTOM, w, IDLE_BODY_BOTTOM + 1)), (0, IDLE_BODY_BOTTOM))
     return out
 
+
+# walk フレームの手足の範囲(x0, y0, x1, y1。x1・y1 は含まない)
+HIND_FOOT = (10, 40, 18, 45)    # 後ろ足の足先
+FRONT_FOOT = (22, 40, 30, 45)   # 手前の前足の足先
+HAND = (30, 37, 35, 42)         # 前へ伸ばした手
+
+
+def _move_pixels(im: Image.Image, box, dx: int, dy: int, refill_from_above: bool = False) -> None:
+    """box 内の不透明画素を (dx, dy) だけ動かす。元の場所は透明にする。
+    refill_from_above=True なら、動かして空いた上端の行を、直上の行の画素で埋める(胴体との継ぎ目用)。"""
+    x0, y0, x1, y1 = box
+    src = im.copy()
+    pixels = [(x, y, src.getpixel((x, y))) for y in range(y0, y1) for x in range(x0, x1) if src.getpixel((x, y))[3] > 0]
+    for x, y, _ in pixels:
+        im.putpixel((x, y), (0, 0, 0, 0))
+    for x, y, p in pixels:
+        im.putpixel((x + dx, y + dy), p)
+    if refill_from_above:
+        for x, y, _ in pixels:
+            if im.getpixel((x, y))[3] == 0 and y - 1 >= 0 and src.getpixel((x, y - 1))[3] > 0 and y == y0 + 0:
+                im.putpixel((x, y), src.getpixel((x, y - 1)))
+
+
+def walk_frames(walk: Image.Image) -> tuple[Image.Image, Image.Image]:
+    """歩行の 2 コマ。足と手を左右逆に動かす(斜め歩き)。
+    a: 前足を上げて前へ、手は下げる(後ろ足は接地) / b: 後ろ足を上げて後ろへ、手を上げる(前足は接地)
+    """
+    a = walk.copy()
+    _move_pixels(a, FRONT_FOOT, 1, -2)
+    _move_pixels(a, HAND, 0, 1, refill_from_above=True)
+    b = walk.copy()
+    _move_pixels(b, HIND_FOOT, -1, -2)
+    _move_pixels(b, HAND, 0, -1)
+    return a, b
+
+
 OUTLINE = (74, 40, 24, 255)
 APPLE = (214, 48, 48, 255)
 APPLE_HI = (255, 140, 120, 255)
@@ -74,6 +110,10 @@ def main() -> None:
     d.save(FRAMES / "dirty.png", optimize=True)
 
     idle_up(normal).save(FRAMES / "idle_up.png", optimize=True)
+
+    walk_a, walk_b = walk_frames(Image.open(FRAMES / "walk.png").convert("RGBA"))
+    walk_a.save(FRAMES / "walk_a.png", optimize=True)
+    walk_b.save(FRAMES / "walk_b.png", optimize=True)
 
 
 if __name__ == "__main__":
