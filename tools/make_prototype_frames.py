@@ -26,34 +26,35 @@ def idle_up(normal: Image.Image) -> Image.Image:
     return out
 
 
-# walk フレームの手足・頭の範囲(x0, y0, x1, y1。x1・y1 は含まない)
-HIND_LEG = (8, 39, 18, 45)      # 後ろ足(付け根から足先まで)
-FRONT_LEG = (22, 39, 30, 45)    # 手前の前足
-HAND = (30, 37, 35, 42)         # 前へ伸ばした手
+# walk フレームの脚・頭の範囲(x0, y0, x1, y1。x1・y1 は含まない)
+LEG_TOP = 39                    # 脚が始まる行。この行以降を脚として扱い、足先は全脚とも行 44 で接地
+NEAR_HIND = (8, LEG_TOP, 18, 45)    # 手前の後ろ足
+NEAR_FRONT = (22, LEG_TOP, 30, 45)  # 手前の前足
+FAR_OFFSET = 5                  # 奥側の脚は手前の脚を右へこの分ずらして描く
+FAR_SHADE = 0.78                # 奥側の脚は少し暗くする
+STRIDE = 2                      # 脚の前後の振り幅(足先。付け根ほど小さくなる)
 HEAD = (12, 0, 43, 27)          # 頭(首元のスカーフの手前まで)
 
 
-def _shear_pixels(im: Image.Image, box, dx_total: int) -> None:
-    """box 内の脚を前後(左右)に振る。付け根(上端)ほど小さく、足先(下端)ほど大きく動かす。
-    向き(dx_total の符号)は + が右(前)、- が左(後ろ)。動かして空いた場所は隣の画素で埋めて脚を繋げる。"""
+def _leg_sprite(im: Image.Image, box) -> dict[tuple[int, int], tuple]:
     x0, y0, x1, y1 = box
-    src = im.copy()
-    rows = y1 - y0
-    for y in range(y0, y1):
-        dx = round(dx_total * (y - y0 + 1) / rows)
-        if dx == 0:
-            continue
-        for x in range(x0, x1):
-            im.putpixel((x, y), (0, 0, 0, 0))
-        for x in range(x0, x1):
-            p = src.getpixel((x, y))
-            if p[3] > 0:
-                im.putpixel((x + dx, y), p)
+    return {(x, y): im.getpixel((x, y)) for y in range(y0, y1) for x in range(x0, x1) if im.getpixel((x, y))[3] > 0}
 
 
-def _move_pixels(im: Image.Image, box, dx: int, dy: int, refill: bool = False) -> None:
-    """box 内の不透明画素を (dx, dy) だけ動かす。元の場所は透明にする。
-    refill=True なら、空いた場所を動かす方向の反対隣の画素で埋める(胴体との継ぎ目用)。"""
+def _shade(p, k: float):
+    return (int(p[0] * k), int(p[1] * k), int(p[2] * k), p[3])
+
+
+def _draw_leg(im: Image.Image, sprite, dx_offset: int, dx_stride: int, shade: float = 1.0) -> None:
+    """脚を描く。dx_stride は前後の振り(+が前=右)で、付け根(上端)ほど小さく足先ほど大きい。"""
+    rows = 45 - LEG_TOP
+    for (x, y), p in sprite.items():
+        dx = dx_offset + round(dx_stride * (y - LEG_TOP + 1) / rows)
+        im.putpixel((x + dx, y), _shade(p, shade) if shade != 1.0 else p)
+
+
+def _move_pixels(im: Image.Image, box, dx: int, dy: int) -> None:
+    """box 内の不透明画素を (dx, dy) だけ動かす。元の場所は透明にする。"""
     x0, y0, x1, y1 = box
     src = im.copy()
     pixels = [(x, y, src.getpixel((x, y))) for y in range(y0, y1) for x in range(x0, x1) if src.getpixel((x, y))[3] > 0]
@@ -61,30 +62,34 @@ def _move_pixels(im: Image.Image, box, dx: int, dy: int, refill: bool = False) -
         im.putpixel((x, y), (0, 0, 0, 0))
     for x, y, p in pixels:
         im.putpixel((x + dx, y + dy), p)
-    if refill:
-        sx, sy = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0)
-        for x, y, _ in pixels:
-            if im.getpixel((x, y))[3] == 0:
-                q = src.getpixel((x - sx, y - sy))
-                if q[3] > 0:
-                    im.putpixel((x, y), q)
 
 
-def walk_frames(walk: Image.Image) -> tuple[Image.Image, Image.Image]:
-    """歩行の 2 コマ。手足を前後に、左右逆位相で振る。頭は 1px 下げる(間に挟む walk が元の高さ)。
-    a: 前足が前・後ろ足が後ろ・手は後ろ / b: 前足が後ろ・後ろ足が前・手は前
+def walk_frames(walk: Image.Image) -> tuple[Image.Image, Image.Image, Image.Image]:
+    """歩行の 3 コマ(walk_mid: 4 本とも接地の基本 / walk_a / walk_b)。
+
+    元の walk ポーズは手前の脚 2 本と、地面に届かない「伸ばした手」だったため、
+    脚を切り離して奥側の脚(前・後ろ)を描き足し、4 本すべてを足先の高さ(行 44)にそろえる。
+    a: 手前の前足と奥の後ろ足が前、手前の後ろ足と奥の前足が後ろ / b: その逆(斜め歩き)。
+    頭は a・b で 1px 下げる(walk_mid が元の高さ)。
     """
-    a = walk.copy()
-    _shear_pixels(a, HIND_LEG, -2)
-    _shear_pixels(a, FRONT_LEG, 2)
-    _move_pixels(a, HAND, -1, 0)
-    _move_pixels(a, HEAD, 0, 1)
-    b = walk.copy()
-    _shear_pixels(b, HIND_LEG, 2)
-    _shear_pixels(b, FRONT_LEG, -2)
-    _move_pixels(b, HAND, 1, 0, refill=True)
-    _move_pixels(b, HEAD, 0, 1)
-    return a, b
+    near_hind = _leg_sprite(walk, NEAR_HIND)
+    near_front = _leg_sprite(walk, NEAR_FRONT)
+
+    body = walk.copy()
+    body.paste((0, 0, 0, 0), (0, LEG_TOP, body.width, body.height))  # 脚と伸ばした手を除去
+
+    def compose(front_dir: int, head_down: bool) -> Image.Image:
+        im = body.copy()
+        # 奥側 → 手前の順に描く(手前の脚が奥の脚を隠す)
+        _draw_leg(im, near_hind, FAR_OFFSET, STRIDE * front_dir, FAR_SHADE)   # 奥の後ろ足: 手前の前足と同位相
+        _draw_leg(im, near_front, FAR_OFFSET, -STRIDE * front_dir, FAR_SHADE)  # 奥の前足: 手前の後ろ足と同位相
+        _draw_leg(im, near_hind, 0, -STRIDE * front_dir)
+        _draw_leg(im, near_front, 0, STRIDE * front_dir)
+        if head_down:
+            _move_pixels(im, HEAD, 0, 1)
+        return im
+
+    return compose(0, False), compose(1, True), compose(-1, True)
 
 
 OUTLINE = (74, 40, 24, 255)
@@ -137,7 +142,8 @@ def main() -> None:
 
     idle_up(normal).save(FRAMES / "idle_up.png", optimize=True)
 
-    walk_a, walk_b = walk_frames(Image.open(FRAMES / "walk.png").convert("RGBA"))
+    walk_mid, walk_a, walk_b = walk_frames(Image.open(FRAMES / "walk.png").convert("RGBA"))
+    walk_mid.save(FRAMES / "walk_mid.png", optimize=True)
     walk_a.save(FRAMES / "walk_a.png", optimize=True)
     walk_b.save(FRAMES / "walk_b.png", optimize=True)
 

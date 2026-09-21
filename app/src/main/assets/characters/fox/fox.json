@@ -12,6 +12,7 @@
     "eat_2": "frames/eat_2.png",
     "dirty": "frames/dirty.png",
     "idle_up": "frames/idle_up.png",
+    "walk_mid": "frames/walk_mid.png",
     "walk_a": "frames/walk_a.png",
     "walk_b": "frames/walk_b.png"
   },
@@ -27,9 +28,9 @@
       "loop": true,
       "steps": [
         { "frame": "walk_a", "ms": 200 },
-        { "frame": "walk", "ms": 120 },
+        { "frame": "walk_mid", "ms": 120 },
         { "frame": "walk_b", "ms": 200 },
-        { "frame": "walk", "ms": 120 }
+        { "frame": "walk_mid", "ms": 120 }
       ]
     },
     "happy": {
