@@ -66,6 +66,7 @@ import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.data.careConfig
 import com.nebu965039.monsterraising.data.ScoreRecordStore
 import com.nebu965039.monsterraising.minigame.wallbreak.ChoiceOutcome
 import com.nebu965039.monsterraising.minigame.wallbreak.RuleKind
@@ -164,7 +165,8 @@ fun WallBreakScreen() {
         }
         progress = settlement.progress
         val before = petStore.load()
-        val after = petStore.update(DemoClock.now()) { PetSimulator.applyMinigame(it, DemoClock.now(), settlement.appliedGains) }
+        val config = careConfig(context)
+        val after = petStore.update(DemoClock.now(), config) { PetSimulator.applyMinigame(it, DemoClock.now(), settlement.appliedGains, config) }
         summary = WallBreakSummary(
             result, settlement.appliedGains,
             applied = before != null && before.stage != Stage.EGG && after.generation == before.generation,

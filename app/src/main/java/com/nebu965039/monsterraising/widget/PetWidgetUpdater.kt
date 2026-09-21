@@ -22,6 +22,7 @@ import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.core.widget.PetWidgetModel
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.data.careConfig
 import com.nebu965039.monsterraising.ui.common.label
 
 /**
@@ -37,10 +38,9 @@ object PetWidgetUpdater {
     private const val SOURCE_SIZE = 48
     private const val DEFAULT_IMAGE_DP = 96
 
-    private val config = PetConfig()
-
     /** 経過時間ぶんの状態を反映して保存し、すべてのウィジェットを更新する。 */
     fun refreshAll(context: Context) {
+        val config = careConfig(context)
         PetStore(context).update(System.currentTimeMillis(), config) {
             PetSimulator.advance(it, System.currentTimeMillis(), config)
         }
@@ -55,6 +55,7 @@ object PetWidgetUpdater {
     }
 
     fun update(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
+        val config = careConfig(context)
         val state = PetStore(context).update(System.currentTimeMillis(), config) { it }
         // 探索中・探索完了は、ウィジェットにも表示する(キャラクターは消えない。8.6節)
         val progress = MiniGameStore(context).load()
@@ -119,6 +120,7 @@ object PetWidgetUpdater {
                 return
             }
         }
+        val config = careConfig(context)
         PetStore(context).update(now, config) { state ->
             when (action) {
                 ACTION_FEED -> PetSimulator.feed(state, now, config.feedGain, config)

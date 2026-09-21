@@ -132,12 +132,13 @@ class WorldMapTest {
         assertEquals(Destination.Home, Destination.Dev.parent)
         assertEquals(Destination.Home, Destination.Dex.parent)
         assertEquals(Destination.Home, Destination.Friends.parent)
+        assertEquals(Destination.Home, Destination.Items.parent)
         assertEquals(Destination.Home, Destination.Settings.parent)
     }
 
     @Test
     fun repeatedBack_alwaysEndsAtHome() {
-        val all = listOf(Destination.Home, Destination.WorldMap, Destination.GameSelect, Destination.Dex, Destination.Friends, Destination.Settings, Destination.Dev) +
+        val all = listOf(Destination.Home, Destination.WorldMap, Destination.GameSelect, Destination.Dex, Destination.Friends, Destination.Items, Destination.Settings, Destination.Dev) +
             MiniGame.entries.map { Destination.Game(it) } + ExplorationSite.entries.map { Destination.Site(it) }
         for (start in all) {
             var d: Destination = start
@@ -151,7 +152,7 @@ class WorldMapTest {
 
     @Test
     fun keys_roundTrip() {
-        val all = listOf(Destination.Home, Destination.WorldMap, Destination.GameSelect, Destination.Dex, Destination.Friends, Destination.Settings, Destination.Dev) +
+        val all = listOf(Destination.Home, Destination.WorldMap, Destination.GameSelect, Destination.Dex, Destination.Friends, Destination.Items, Destination.Settings, Destination.Dev) +
             MiniGame.entries.map { Destination.Game(it) } + ExplorationSite.entries.map { Destination.Site(it) }
         for (d in all) assertEquals(d, Destination.fromKey(d.key))
         assertEquals(all.size, all.map { it.key }.toSet().size) // キーは重複しない

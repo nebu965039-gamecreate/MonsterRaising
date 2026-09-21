@@ -61,7 +61,7 @@ data class PlayStatus(
 /** 1 プレイの精算結果。 */
 data class Settlement(
     val progress: MiniGameProgress,
-    /** 1 日の上限を考慮して、実際に育成へ反映する量(機嫌は上限の対象外) */
+    /** 1 日の上限と装備の効果(8.4節)を考慮して、実際に育成へ反映する量(機嫌は上限の対象外) */
     val appliedGains: MinigameGains,
     /** 有効度が 1 日の上限で削られた */
     val capped: Boolean,
@@ -146,6 +146,14 @@ data class MiniGameProgress(
         val strength = minOf(gains.strength, room(rolled.daily.strengthGained))
         val capped = intellect < gains.intellect || strength < gains.strength
 
+        // 装備の効果: 1 日の上限を適用したあとの増加量に上乗せする(上限の消費は上乗せ前の量で数える)
+        val effect = rolled.inventory.equipEffect()
+        val boosted = MinigameGains(
+            intellect = intellect * (1.0 + effect.intellectGain),
+            strength = strength * (1.0 + effect.strengthGain),
+            mood = gains.mood,
+        )
+
         val rewards = if (cleared) ClearRewardTable.rewards(game, tier, firstClear) else null
         var inventory = rolled.inventory
         if (rewards != null) {
@@ -159,7 +167,7 @@ data class MiniGameProgress(
             ),
             inventory = inventory,
         )
-        return Settlement(progress, MinigameGains(intellect, strength, gains.mood), capped, rewards)
+        return Settlement(progress, boosted, capped, rewards)
     }
 }
 

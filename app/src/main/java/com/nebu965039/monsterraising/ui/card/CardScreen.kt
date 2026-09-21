@@ -51,6 +51,7 @@ import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.data.CardRecordStore
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.data.careConfig
 import com.nebu965039.monsterraising.minigame.card.Attribute
 import com.nebu965039.monsterraising.minigame.card.Card
 import com.nebu965039.monsterraising.minigame.card.CardMatch
@@ -140,7 +141,8 @@ fun CardScreen() {
         }
         progress = settlement.progress
         val before = petStore.load()
-        val after = petStore.update(DemoClock.now()) { PetSimulator.applyMinigame(it, DemoClock.now(), settlement.appliedGains) }
+        val config = careConfig(context)
+        val after = petStore.update(DemoClock.now(), config) { PetSimulator.applyMinigame(it, DemoClock.now(), settlement.appliedGains, config) }
         summary = MatchSummary(
             result, settlement.appliedGains,
             applied = before != null && before.stage != Stage.EGG && after.generation == before.generation,

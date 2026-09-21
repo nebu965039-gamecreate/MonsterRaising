@@ -39,6 +39,7 @@ import com.nebu965039.monsterraising.ui.dex.DexScreen
 import com.nebu965039.monsterraising.ui.friends.FriendsScreen
 import com.nebu965039.monsterraising.ui.settings.SettingsScreen
 import com.nebu965039.monsterraising.ui.game.GameSelectScreen
+import com.nebu965039.monsterraising.ui.items.ItemsScreen
 import com.nebu965039.monsterraising.ui.game.title
 import com.nebu965039.monsterraising.ui.map.ExplorationSiteScreen
 import com.nebu965039.monsterraising.ui.map.WorldMapScreen
@@ -55,6 +56,7 @@ private fun Destination.title(): String = when (this) {
     is Destination.Site -> site.displayName
     Destination.Dex -> "図鑑"
     Destination.Friends -> "フレンド"
+    Destination.Items -> "持ち物"
     Destination.Settings -> "設定"
     Destination.Dev -> "開発用"
 }
@@ -116,6 +118,7 @@ fun AppRoot(resumeTick: Int) {
         if (dest == Destination.Home) {
             HomeHeader(
                 onOpenMap = { go(Destination.WorldMap) },
+                onOpenItems = { go(Destination.Items) },
                 onOpenFriends = { go(Destination.Friends) },
                 onOpenDex = { go(Destination.Dex) },
                 onOpenSettings = { go(Destination.Settings) },
@@ -137,6 +140,7 @@ fun AppRoot(resumeTick: Int) {
                 is Destination.Site -> ExplorationSiteScreen(d.site, onLeave = { go(Destination.WorldMap) })
                 Destination.Dex -> DexScreen()
                 Destination.Friends -> FriendsScreen()
+                Destination.Items -> ItemsScreen()
                 Destination.Settings -> SettingsScreen()
                 Destination.Dev -> DevScreen()
             }

@@ -23,12 +23,13 @@ import androidx.compose.ui.unit.sp
 
 /**
  * メイン画面のヘッダー(基本設計書10.2節)。左にワールドマップへの導線(地図アイコン)、中央に拠点名+天気アイコン、
- * 右にハンバーガーメニュー(フレンド・設定。図鑑への入り口もここに置く)。個別のアイコンは置かず、メニューの中に格納する。
+ * 右にハンバーガーメニュー(持ち物・フレンド・設定。図鑑への入り口もここに置く)。個別のアイコンは置かず、メニューの中に格納する。
  * 拠点名と天気は、背景・天候システム(10.3節)ができるまでの仮の表示。
  */
 @Composable
 fun HomeHeader(
     onOpenMap: () -> Unit,
+    onOpenItems: () -> Unit,
     onOpenFriends: () -> Unit,
     onOpenDex: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -49,6 +50,7 @@ fun HomeHeader(
         Box {
             IconButton(onClick = { menuOpen = true }) { Text("☰", fontSize = 26.sp) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { Text("持ち物") }, onClick = { menuOpen = false; onOpenItems() })
                 DropdownMenuItem(text = { Text("フレンド") }, onClick = { menuOpen = false; onOpenFriends() })
                 DropdownMenuItem(text = { Text("図鑑") }, onClick = { menuOpen = false; onOpenDex() })
                 DropdownMenuItem(text = { Text("設定") }, onClick = { menuOpen = false; onOpenSettings() })
