@@ -14,8 +14,10 @@ import androidx.core.graphics.scale
 import com.nebu965039.monsterraising.MainActivity
 import com.nebu965039.monsterraising.R
 import com.nebu965039.monsterraising.core.exploration.Exploration
+import com.nebu965039.monsterraising.core.minigame.ItemType
 import com.nebu965039.monsterraising.core.pet.PetConfig
 import com.nebu965039.monsterraising.core.pet.PetSimulator
+import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.core.widget.PetWidgetModel
 import com.nebu965039.monsterraising.data.MiniGameStore
@@ -55,8 +57,9 @@ object PetWidgetUpdater {
     fun update(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
         val state = PetStore(context).update(System.currentTimeMillis(), config) { it }
         // 探索中・探索完了は、ウィジェットにも表示する(キャラクターは消えない。8.6節)
-        val exploration = Exploration.summaryLine(Exploration.overview(MiniGameStore(context).load(), System.currentTimeMillis()))
-        val model = PetWidgetModel.of(state, config, exploration)
+        val progress = MiniGameStore(context).load()
+        val exploration = Exploration.summaryLine(Exploration.overview(progress, System.currentTimeMillis()))
+        val model = PetWidgetModel.of(state, config, exploration, riceCount = progress.inventory.count(ItemType.RICE))
         val views = RemoteViews(context.packageName, R.layout.widget_pet)
 
         val scale = imageScale(context, manager.getAppWidgetOptions(appWidgetId))
@@ -91,6 +94,9 @@ object PetWidgetUpdater {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             ),
         )
+        // 餌のボタンには、ごはんの残りを表示する(なければ押せない)
+        views.setTextViewText(R.id.widget_feed, context.getString(R.string.widget_feed_count, model.riceCount))
+        views.setBoolean(R.id.widget_feed, "setEnabled", model.canFeed)
         // 単発タップの簡易お世話(ドラッグ&ドロップ等はウィジェットでは扱えないため本体アプリ限定。10.2.1節)
         views.setOnClickPendingIntent(R.id.widget_feed, actionIntent(context, ACTION_FEED, 1))
         views.setOnClickPendingIntent(R.id.widget_clean, actionIntent(context, ACTION_CLEAN, 2))
@@ -101,6 +107,18 @@ object PetWidgetUpdater {
     /** 餌・掃除・なでるの簡易アクションを保存状態へ反映してから、表示を更新する。 */
     fun handleAction(context: Context, action: String) {
         val now = System.currentTimeMillis()
+        // 餌やりは、ごはんを 1 個消費する。卵・ごはんなしのときは何もしない(表示だけ更新する)
+        if (action == ACTION_FEED) {
+            val isEgg = PetStore(context).load()?.stage == Stage.EGG
+            val consumed = !isEgg && MiniGameStore(context).update { p ->
+                val inventory = p.inventory.consume(ItemType.RICE)
+                if (inventory == null) p to false else p.copy(inventory = inventory) to true
+            }
+            if (!consumed) {
+                updateAll(context)
+                return
+            }
+        }
         PetStore(context).update(now, config) { state ->
             when (action) {
                 ACTION_FEED -> PetSimulator.feed(state, now, config.feedGain, config)

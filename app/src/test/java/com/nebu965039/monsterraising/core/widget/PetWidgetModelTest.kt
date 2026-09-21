@@ -60,6 +60,16 @@ class PetWidgetModelTest {
     }
 
     @Test
+    fun feedButton_needsRiceAndAHatchedPet() {
+        val infant = PetState(PetStats(100.0, 100.0, 50.0), Stage.INFANT, 0L, 0L)
+        val egg = PetState(PetStats(100.0, 100.0, 50.0), Stage.EGG, 0L, 0L)
+        assertTrue(PetWidgetModel.of(infant, riceCount = 3).canFeed)
+        assertEquals(3, PetWidgetModel.of(infant, riceCount = 3).riceCount)
+        assertFalse(PetWidgetModel.of(infant, riceCount = 0).canFeed) // ごはんがなければ押せない
+        assertFalse(PetWidgetModel.of(egg, riceCount = 3).canFeed) // 卵には餌をあげられない
+    }
+
+    @Test
     fun generationAndStageArePassedThrough() {
         val m = model(PetStats(100.0, 100.0, 50.0), stage = Stage.GROWTH_2, generation = 3)
         assertEquals(3, m.generation)

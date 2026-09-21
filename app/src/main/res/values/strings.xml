@@ -6,6 +6,7 @@
     <string name="widget_image_description">モンスター(タップでアプリを開く)</string>
     <string name="widget_egg_note">卵(もうすぐ生まれます)</string>
     <string name="widget_feed">餌</string>
+    <string name="widget_feed_count">餌 ×%1$d</string>
     <string name="widget_clean">掃除</string>
     <string name="widget_pet">なでる</string>
     <string name="notification_channel_exploration">探索の完了</string>

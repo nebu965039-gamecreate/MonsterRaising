@@ -61,8 +61,13 @@ class MainActivity : ComponentActivity() {
                         val store = MiniGameStore(applicationContext)
                         val bonus = ExplorationConfig()
                         while (true) {
+                            val gift = store.update { p -> Exploration.claimStartingGift(p, bonus) }
                             val got = store.update { p -> Exploration.claimLoginBonus(p, DayClock.dayIndex(DemoClock.now()), bonus) }
-                            if (got) loginNotice = "ログインボーナス: 探索ポイント +${bonus.loginBonus} / ごはん +${bonus.loginRice}"
+                            val messages = buildList {
+                                if (gift) add("はじめてのプレゼント: ごはん ${bonus.startingRice} 個")
+                                if (got) add("ログインボーナス: 探索ポイント +${bonus.loginBonus} / ごはん +${bonus.loginRice}")
+                            }
+                            if (messages.isNotEmpty()) loginNotice = messages.joinToString("\n")
                             delay(30_000)
                         }
                     }
