@@ -1,5 +1,6 @@
 package com.nebu965039.monsterraising.core.minigame
 
+import com.nebu965039.monsterraising.core.exploration.ExplorationState
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -76,6 +77,8 @@ data class Settlement(
 data class MiniGameProgress(
     val daily: DailyState = DailyState(),
     val inventory: Inventory = Inventory(),
+    /** 探索の状況(8節)。探索ポイント・アイテムと同じ保存領域で、まとめて更新する */
+    val exploration: ExplorationState = ExplorationState(),
 ) {
     fun rolledTo(day: Long): MiniGameProgress = if (daily.day == day) this else copy(daily = DailyState(day = day))
 
