@@ -26,15 +26,34 @@ def idle_up(normal: Image.Image) -> Image.Image:
     return out
 
 
-# walk フレームの手足の範囲(x0, y0, x1, y1。x1・y1 は含まない)
-HIND_FOOT = (10, 40, 18, 45)    # 後ろ足の足先
-FRONT_FOOT = (22, 40, 30, 45)   # 手前の前足の足先
+# walk フレームの手足・頭の範囲(x0, y0, x1, y1。x1・y1 は含まない)
+HIND_LEG = (8, 39, 18, 45)      # 後ろ足(付け根から足先まで)
+FRONT_LEG = (22, 39, 30, 45)    # 手前の前足
 HAND = (30, 37, 35, 42)         # 前へ伸ばした手
+HEAD = (12, 0, 43, 27)          # 頭(首元のスカーフの手前まで)
 
 
-def _move_pixels(im: Image.Image, box, dx: int, dy: int, refill_from_above: bool = False) -> None:
+def _shear_pixels(im: Image.Image, box, dx_total: int) -> None:
+    """box 内の脚を前後(左右)に振る。付け根(上端)ほど小さく、足先(下端)ほど大きく動かす。
+    向き(dx_total の符号)は + が右(前)、- が左(後ろ)。動かして空いた場所は隣の画素で埋めて脚を繋げる。"""
+    x0, y0, x1, y1 = box
+    src = im.copy()
+    rows = y1 - y0
+    for y in range(y0, y1):
+        dx = round(dx_total * (y - y0 + 1) / rows)
+        if dx == 0:
+            continue
+        for x in range(x0, x1):
+            im.putpixel((x, y), (0, 0, 0, 0))
+        for x in range(x0, x1):
+            p = src.getpixel((x, y))
+            if p[3] > 0:
+                im.putpixel((x + dx, y), p)
+
+
+def _move_pixels(im: Image.Image, box, dx: int, dy: int, refill: bool = False) -> None:
     """box 内の不透明画素を (dx, dy) だけ動かす。元の場所は透明にする。
-    refill_from_above=True なら、動かして空いた上端の行を、直上の行の画素で埋める(胴体との継ぎ目用)。"""
+    refill=True なら、空いた場所を動かす方向の反対隣の画素で埋める(胴体との継ぎ目用)。"""
     x0, y0, x1, y1 = box
     src = im.copy()
     pixels = [(x, y, src.getpixel((x, y))) for y in range(y0, y1) for x in range(x0, x1) if src.getpixel((x, y))[3] > 0]
@@ -42,22 +61,29 @@ def _move_pixels(im: Image.Image, box, dx: int, dy: int, refill_from_above: bool
         im.putpixel((x, y), (0, 0, 0, 0))
     for x, y, p in pixels:
         im.putpixel((x + dx, y + dy), p)
-    if refill_from_above:
+    if refill:
+        sx, sy = (dx > 0) - (dx < 0), (dy > 0) - (dy < 0)
         for x, y, _ in pixels:
-            if im.getpixel((x, y))[3] == 0 and y - 1 >= 0 and src.getpixel((x, y - 1))[3] > 0 and y == y0 + 0:
-                im.putpixel((x, y), src.getpixel((x, y - 1)))
+            if im.getpixel((x, y))[3] == 0:
+                q = src.getpixel((x - sx, y - sy))
+                if q[3] > 0:
+                    im.putpixel((x, y), q)
 
 
 def walk_frames(walk: Image.Image) -> tuple[Image.Image, Image.Image]:
-    """歩行の 2 コマ。足と手を左右逆に動かす(斜め歩き)。
-    a: 前足を上げて前へ、手は下げる(後ろ足は接地) / b: 後ろ足を上げて後ろへ、手を上げる(前足は接地)
+    """歩行の 2 コマ。手足を前後に、左右逆位相で振る。頭は 1px 下げる(間に挟む walk が元の高さ)。
+    a: 前足が前・後ろ足が後ろ・手は後ろ / b: 前足が後ろ・後ろ足が前・手は前
     """
     a = walk.copy()
-    _move_pixels(a, FRONT_FOOT, 1, -2)
-    _move_pixels(a, HAND, 0, 1, refill_from_above=True)
+    _shear_pixels(a, HIND_LEG, -2)
+    _shear_pixels(a, FRONT_LEG, 2)
+    _move_pixels(a, HAND, -1, 0)
+    _move_pixels(a, HEAD, 0, 1)
     b = walk.copy()
-    _move_pixels(b, HIND_FOOT, -1, -2)
-    _move_pixels(b, HAND, 0, -1)
+    _shear_pixels(b, HIND_LEG, 2)
+    _shear_pixels(b, FRONT_LEG, -2)
+    _move_pixels(b, HAND, 1, 0, refill=True)
+    _move_pixels(b, HEAD, 0, 1)
     return a, b
 
 
