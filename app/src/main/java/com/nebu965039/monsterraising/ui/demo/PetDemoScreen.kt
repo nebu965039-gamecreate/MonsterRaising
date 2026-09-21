@@ -88,11 +88,17 @@ fun PetDemoScreen(characterId: String = "fox") {
     var oneShot by remember { mutableStateOf<String?>(null) }
     var shotToken by remember { mutableIntStateOf(0) }
 
+    var notice by remember { mutableStateOf<String?>(null) }
+    fun commit(next: PetState) {
+        if (next.generation > pet.generation) notice = "放置により死亡しました。卵が残っていました(${next.generation}代目)"
+        pet = next
+    }
+
     LaunchedEffect(pet) { withContext(Dispatchers.IO) { store.save(pet) } }
     LaunchedEffect(Unit) {
         while (true) {
             delay(5_000)
-            pet = PetSimulator.advance(pet, now(), config)
+            commit(PetSimulator.advance(pet, now(), config))
         }
     }
 
@@ -126,7 +132,11 @@ fun PetDemoScreen(characterId: String = "fox") {
                 }
             }
         }
-        Text("段階: ${pet.stage.label()}   (表示: ${oneShot ?: base})", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "${pet.generation}代目  段階: ${pet.stage.label()}   (表示: ${oneShot ?: base})",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
         val isEgg = pet.stage == Stage.EGG
         if (isEgg) {
             Text("卵の間はステータスがありません(幼年期になると初期値が付きます)", style = MaterialTheme.typography.bodyMedium)
@@ -141,31 +151,32 @@ fun PetDemoScreen(characterId: String = "fox") {
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !isEgg, onClick = {
-                pet = PetSimulator.feed(pet, now(), FEED_AMOUNT, config)
+                commit(PetSimulator.feed(pet, now(), FEED_AMOUNT, config))
                 play("eat")
             }) { Text("餌(+${FEED_AMOUNT.toInt()})") }
-            Button(enabled = !isEgg, onClick = { pet = PetSimulator.clean(pet, now(), config.cleanGainPerStain, config) }) {
+            Button(enabled = !isEgg, onClick = { commit(PetSimulator.clean(pet, now(), config.cleanGainPerStain, config)) }) {
                 Text("掃除(+${config.cleanGainPerStain.toInt()})")
             }
             Button(enabled = !isEgg, onClick = {
-                pet = PetSimulator.pet(pet, now(), config)
+                commit(PetSimulator.pet(pet, now(), config))
                 play("happy")
             }) { Text("なでる(+${config.petMoodGain.toInt()})") }
         }
         Text("時間を進める(仮想時計 +${offsetMs / HOUR_MS}時間)", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { offsetMs += HOUR_MS; pet = PetSimulator.advance(pet, now(), config) }) { Text("+1時間") }
-            OutlinedButton(onClick = { offsetMs += DAY_MS; pet = PetSimulator.advance(pet, now(), config) }) { Text("+1日") }
-            OutlinedButton(onClick = { offsetMs += 60_000L; pet = PetSimulator.advance(pet, now(), config) }) { Text("+1分") }
+            OutlinedButton(onClick = { offsetMs += HOUR_MS; commit(PetSimulator.advance(pet, now(), config)) }) { Text("+1時間") }
+            OutlinedButton(onClick = { offsetMs += DAY_MS; commit(PetSimulator.advance(pet, now(), config)) }) { Text("+1日") }
+            OutlinedButton(onClick = { offsetMs += 60_000L; commit(PetSimulator.advance(pet, now(), config)) }) { Text("+1分") }
             OutlinedButton(onClick = {
                 offsetMs = 0L
                 store.clear()
+                notice = null
                 pet = PetState.newEgg(now(), config)
             }) { Text("卵からやり直す") }
         }
         Text(
             "進化は「段階の期間を満たした時点」で満腹度・清潔度が60以上のときに起こります(卵は時間だけで孵化)。" +
-                "満たさない間は保留です(1回の更新で進むのは1段階まで)。",
+                "満たさない間は保留です(1回の更新で進むのは1段階まで)。満腹度0が24時間続き、清潔度が20以下になると死亡し、卵に戻ります。",
             style = MaterialTheme.typography.bodySmall,
         )
     }

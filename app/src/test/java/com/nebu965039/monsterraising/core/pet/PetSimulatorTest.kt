@@ -2,6 +2,7 @@ package com.nebu965039.monsterraising.core.pet
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PetSimulatorTest {
@@ -24,16 +25,18 @@ class PetSimulatorTest {
     fun decay_perHour() {
         val s = PetSimulator.advance(state(), 2 * hour, config)
         assertEquals(88.0, s.stats.satiety, 1e-9) // 10分ごとに -1 = 1時間で -6
-        assertEquals(98.6, s.stats.cleanliness, 1e-9)
+        assertEquals(88.0, s.stats.cleanliness, 1e-9) // 清潔度も 10分ごとに -1
         assertEquals(50.0, s.stats.mood, 1e-9) // 基準以上の間は機嫌は減らない
         assertEquals(2 * hour, s.lastUpdatedMs)
     }
 
     @Test
     fun decay_isCappedAt24Hours() {
-        val s = PetSimulator.advance(state(), 100 * hour, config)
-        assertEquals(0.0, s.stats.satiety, 1e-9) // 24時間で 144 減 → 0 に張り付く
-        assertEquals(100.0 - 0.7 * 24, s.stats.cleanliness, 1e-9) // 100時間ぶんではなく 24時間ぶんだけ
+        // 上限そのものを確かめるため、ゆっくり減る設定で 100時間放置(反映されるのは 24時間ぶんだけ)
+        val slow = PetConfig(satietyDecayPerHour = 1.0, cleanlinessDecayPerHour = 0.7)
+        val s = PetSimulator.advance(state(), 100 * hour, slow)
+        assertEquals(76.0, s.stats.satiety, 1e-9)
+        assertEquals(100.0 - 0.7 * 24, s.stats.cleanliness, 1e-9)
     }
 
     @Test
@@ -78,9 +81,9 @@ class PetSimulatorTest {
 
     @Test
     fun mood_dropsFromTheEarlierOfTheTwoCrossings() {
-        // 清潔度 61 は (1/0.7) 時間後に 60 を下回る。満腹度 100 は約 6.7 時間後。5時間の窓では清潔度側が先
+        // 清潔度 61 は 1/6 時間後に 60 を下回る。満腹度 100 は約 6.7 時間後。5時間の窓では清潔度側が先
         val s = PetSimulator.advance(state(satiety = 100.0, cleanliness = 61.0, mood = 50.0), 5 * hour, config)
-        assertEquals(50.0 - 5.0 * (5.0 - 1.0 / 0.7), s.stats.mood, 1e-9)
+        assertEquals(50.0 - 5.0 * (5.0 - 1.0 / 6.0), s.stats.mood, 1e-9)
     }
 
     @Test
@@ -93,6 +96,85 @@ class PetSimulatorTest {
     fun mood_doesNotDropForEgg() {
         val egg = PetState(PetStats(10.0, 10.0, 50.0), Stage.EGG, 0L, 0L)
         assertEquals(50.0, PetSimulator.advance(egg, 30_000L, config).stats.mood, 1e-9)
+    }
+
+    // --- 上限(24時間)の方針と放置による死亡(4.4) ---
+
+    @Test
+    fun cappedDecayNeverChangesTheOutcome_gaugesBottomOutBeforeTheCap() {
+        // 方針: 満タンから 24時間の上限より前に 0 へ届く速さにしておく
+        assertTrue(100.0 / config.satietyDecayPerHour < config.decayCapHours)
+        assertTrue(100.0 / config.cleanlinessDecayPerHour < config.decayCapHours)
+        val atCap = PetSimulator.advance(state(), 24 * hour, config).stats
+        val beyondCap = PetSimulator.advance(state(), 40 * hour, config).stats // 死亡(約 40時間40分)の手前
+        assertEquals(atCap, beyondCap)
+    }
+
+    @Test
+    fun satietyZeroSince_isBackCalculatedFromDecayRate() {
+        val s = PetSimulator.advance(state(satiety = 12.0), 10 * hour, config) // 2時間後に 0 になる
+        assertEquals(0.0, s.stats.satiety, 1e-9)
+        assertEquals(2 * hour, s.satietyZeroSinceMs)
+    }
+
+    @Test
+    fun satietyZeroSince_isNullWhileSatietyRemains() {
+        assertNull(PetSimulator.advance(state(), 10 * hour, config).satietyZeroSinceMs)
+    }
+
+    @Test
+    fun neglectDeath_afterSatietyZeroFor24HoursAndCleanlinessLow() {
+        // 満腹度は 16時間40分後に 0。そこから 24時間 = 40時間40分後に死亡
+        val before = PetSimulator.advance(state(), 40 * hour, config)
+        assertEquals(Stage.INFANT, before.stage)
+        val dead = PetSimulator.advance(state(), 41 * hour, config)
+        assertEquals(Stage.EGG, dead.stage)
+        assertEquals(2, dead.generation)
+        assertEquals(41 * hour, dead.stageEnteredAtMs)
+    }
+
+    @Test
+    fun neglectDeath_worksAcrossSeveralOpens() {
+        val first = PetSimulator.advance(state(), 30 * hour, config) // 0 の継続はまだ 13時間20分
+        assertEquals(Stage.INFANT, first.stage)
+        assertEquals(60_000_000L, first.satietyZeroSinceMs)
+        val second = PetSimulator.advance(first, 45 * hour, config)
+        assertEquals(Stage.EGG, second.stage)
+        assertEquals(2, second.generation)
+    }
+
+    @Test
+    fun neglectDeath_notWhenCleanlinessAboveThreshold() {
+        val s = PetState(PetStats(0.0, 60.0, 50.0), Stage.INFANT, 0L, 25 * hour, satietyZeroSinceMs = 0L)
+        assertEquals(Stage.INFANT, PetSimulator.advance(s, 25 * hour, config).stage)
+    }
+
+    @Test
+    fun neglectDeath_boundaryCleanlinessExactlyAtThresholdCounts() {
+        val s = PetState(PetStats(0.0, 20.0, 50.0), Stage.INFANT, 0L, 25 * hour, satietyZeroSinceMs = 0L)
+        assertEquals(Stage.EGG, PetSimulator.advance(s, 25 * hour, config).stage)
+    }
+
+    @Test
+    fun feeding_breaksTheZeroStreak() {
+        val zero = PetState(PetStats(0.0, 0.0, 0.0), Stage.INFANT, 0L, 10 * hour, satietyZeroSinceMs = 0L)
+        val fed = PetSimulator.feed(zero, 10 * hour, 20.0, config)
+        assertNull(fed.satietyZeroSinceMs)
+        assertEquals(Stage.INFANT, fed.stage)
+    }
+
+    @Test
+    fun careIsTooLateWhenDeathConditionAlreadyMet() {
+        val zero = PetState(PetStats(0.0, 0.0, 0.0), Stage.INFANT, 0L, 25 * hour, satietyZeroSinceMs = 0L)
+        val s = PetSimulator.feed(zero, 25 * hour, 100.0, config)
+        assertEquals(Stage.EGG, s.stage)
+        assertEquals(2, s.generation)
+    }
+
+    @Test
+    fun eggNeverDies() {
+        val egg = PetState(PetStats(0.0, 0.0, 0.0), Stage.EGG, 0L, 0L, satietyZeroSinceMs = 0L)
+        assertEquals(Stage.EGG, PetSimulator.advance(egg, 30_000L, config).stage)
     }
 
     // --- お世話 ---

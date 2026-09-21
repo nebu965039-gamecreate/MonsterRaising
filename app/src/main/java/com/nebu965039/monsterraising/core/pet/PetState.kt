@@ -13,23 +13,30 @@ data class PetState(
     val stageEnteredAtMs: Long,
     /** ステータスを最後に更新した時刻(エポックms)。次回はここからの経過時間で減少を計算する */
     val lastUpdatedMs: Long,
+    /** 満腹度が 0 になった時刻(エポックms)。0 でない間は null。放置による死亡(4.4節)の判定に使う */
+    val satietyZeroSinceMs: Long? = null,
+    /** 何代目か(4.5節)。放置による死亡のたびに +1 する */
+    val generation: Int = 1,
 ) {
     companion object {
         /** 新しい卵から始める。卵はステータスを持たないため [stats] は未使用(幼年期に入るときに初期値へ置き換わる) */
-        fun newEgg(nowMs: Long, config: PetConfig = PetConfig()) = PetState(
+        fun newEgg(nowMs: Long, config: PetConfig = PetConfig(), generation: Int = 1) = PetState(
             stats = config.initialStats,
             stage = Stage.EGG,
             stageEnteredAtMs = nowMs,
             lastUpdatedMs = nowMs,
+            generation = generation,
         )
     }
 }
 
 /** 時間経過とお世話による状態遷移(オフライン計算方式。4.1節)。 */
 object PetSimulator {
-    /** 前回更新からの経過時間ぶんの自然減少を反映し、進化を判定する。 */
-    fun advance(state: PetState, nowMs: Long, config: PetConfig = PetConfig()): PetState =
-        evolve(decay(state, nowMs, config), nowMs, config)
+    /** 前回更新からの経過時間ぶんの自然減少を反映し、死亡・進化を判定する。 */
+    fun advance(state: PetState, nowMs: Long, config: PetConfig = PetConfig()): PetState {
+        val decayed = decay(state, nowMs, config)
+        return if (isNeglectDeath(decayed, nowMs, config)) died(decayed, nowMs, config) else evolve(decayed, nowMs, config)
+    }
 
     fun feed(state: PetState, nowMs: Long, amount: Double, config: PetConfig = PetConfig()) =
         act(state, nowMs, config) { it.feed(amount).addMood(config.feedMoodGain) }
@@ -42,12 +49,17 @@ object PetSimulator {
 
     /**
      * 経過時間ぶんの減少を反映してから [change] を適用し、進化を再判定する(保留中の進化が成立しうるため)。
+     * 減少の反映で死亡条件を満たした場合は、お世話は間に合わず新しい卵になる。
      * 卵はステータスを持たないため、お世話は反映されない。
      */
     fun act(state: PetState, nowMs: Long, config: PetConfig, change: (PetStats) -> PetStats): PetState {
         if (state.stage == Stage.EGG) return advance(state, nowMs, config)
         val decayed = decay(state, nowMs, config)
-        return evolve(decayed.copy(stats = change(decayed.stats)), nowMs, config)
+        if (isNeglectDeath(decayed, nowMs, config)) return died(decayed, nowMs, config)
+        val changed = decayed.copy(stats = change(decayed.stats))
+        // 満腹度が回復したら「0 の継続」は途切れる
+        val next = if (changed.stats.satiety > 0.0) changed.copy(satietyZeroSinceMs = null) else changed
+        return evolve(next, nowMs, config)
     }
 
     private fun decay(state: PetState, nowMs: Long, config: PetConfig): PetState {
@@ -55,13 +67,36 @@ object PetSimulator {
         val elapsed = (nowMs - state.lastUpdatedMs).coerceAtLeast(0L).coerceAtMost(config.decayCapMs)
         val hours = elapsed / PetConfig.MS_PER_HOUR
         val hoursBelow = hoursBelowThreshold(state.stats, hours, config)
+        val satiety = PetStats.clampGauge(state.stats.satiety - config.satietyDecayPerHour * hours)
         val stats = state.stats.copy(
-            satiety = PetStats.clampGauge(state.stats.satiety - config.satietyDecayPerHour * hours),
+            satiety = satiety,
             cleanliness = PetStats.clampGauge(state.stats.cleanliness - config.cleanlinessDecayPerHour * hours),
             mood = PetStats.clampGauge(state.stats.mood - config.moodDecayPerHour * hoursBelow),
         )
-        return state.copy(stats = stats, lastUpdatedMs = nowMs)
+        val zeroSince = when {
+            satiety > 0.0 -> null
+            state.satietyZeroSinceMs != null -> state.satietyZeroSinceMs
+            // 0 になった時刻を減少速度から逆算する(開いた時刻ではなく、実際に 0 になった時刻を記録する)
+            state.stats.satiety > 0.0 && config.satietyDecayPerHour > 0.0 ->
+                state.lastUpdatedMs + (state.stats.satiety / config.satietyDecayPerHour * PetConfig.MS_PER_HOUR).toLong()
+            else -> state.lastUpdatedMs
+        }
+        return state.copy(stats = stats, lastUpdatedMs = nowMs, satietyZeroSinceMs = zeroSince)
     }
+
+    /**
+     * 放置による死亡(4.4節): 満腹度 0 の状態が 24 時間継続し、かつ清潔度が 20% 以下。
+     * 経過時間の上限(24時間)は減少量にだけ効き、この継続時間は実際の時刻で数える。
+     */
+    private fun isNeglectDeath(state: PetState, nowMs: Long, config: PetConfig): Boolean {
+        if (state.stage == Stage.EGG) return false
+        val zeroSince = state.satietyZeroSinceMs ?: return false
+        return nowMs - zeroSince >= config.deathSatietyZeroMs && state.stats.cleanliness <= config.deathCleanlinessMax
+    }
+
+    /** 「実は卵を1つ残していた」: 育成データはリセットされ、ボーナスなしの新しい卵から再開する(4.4節)。 */
+    private fun died(state: PetState, nowMs: Long, config: PetConfig): PetState =
+        PetState.newEgg(nowMs, config, generation = state.generation + 1)
 
     /**
      * 経過 [hours] のうち、満腹度・清潔度のどちらかが基準を下回っている時間(4.1: 機嫌が下がる期間)。
