@@ -50,7 +50,6 @@ import com.nebu965039.monsterraising.core.exploration.ExplorationPlan
 import com.nebu965039.monsterraising.core.exploration.ExplorationSite
 import com.nebu965039.monsterraising.core.exploration.ExplorationStatus
 import com.nebu965039.monsterraising.core.exploration.StartResult
-import com.nebu965039.monsterraising.core.minigame.DayClock
 import com.nebu965039.monsterraising.core.minigame.ItemType
 import com.nebu965039.monsterraising.core.minigame.MiniGameProgress
 import com.nebu965039.monsterraising.core.pet.Stage
@@ -98,8 +97,6 @@ fun MapScreen() {
     var progress by remember { mutableStateOf(store.load()) }
     var nowMs by remember { mutableLongStateOf(DemoClock.now()) }
     var site by remember { mutableStateOf<ExplorationSite?>(null) }
-    var notice by remember { mutableStateOf<String?>(null) }
-    fun day() = DayClock.dayIndex(DemoClock.now())
 
     // Android 13 以降は、通知の許可を求める(探索の完了を通知するため)
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -118,17 +115,18 @@ fun MapScreen() {
             delay(1_000)
         }
     }
-    // ログインボーナス(1 日 1 回)
+    // ログインボーナスは、アプリを開いたときに受け取る(MainActivity)。ほかの画面で増えた持ち物を読み直す
     LaunchedEffect(Unit) {
-        val got = store.update { p -> Exploration.claimLoginBonus(p, day(), config) }
-        progress = store.load()
-        if (got) notice = "ログインボーナス: 探索ポイント +${config.loginBonus}"
+        while (true) {
+            progress = store.load()
+            delay(2_000)
+        }
     }
 
     val isEgg = petStore.load()?.stage == Stage.EGG
     val current = site
     if (current == null) {
-        WorldMap(progress, nowMs, notice, onSelect = { site = it })
+        WorldMap(progress, nowMs, onSelect = { site = it })
     } else {
         SiteView(
             site = current,
@@ -166,7 +164,7 @@ fun MapScreen() {
 }
 
 @Composable
-private fun WorldMap(progress: MiniGameProgress, nowMs: Long, notice: String?, onSelect: (ExplorationSite) -> Unit) {
+private fun WorldMap(progress: MiniGameProgress, nowMs: Long, onSelect: (ExplorationSite) -> Unit) {
     val capacity = config.capacity(DemoFriends.hasFriends)
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -174,7 +172,6 @@ private fun WorldMap(progress: MiniGameProgress, nowMs: Long, notice: String?, o
     ) {
         Text("ワールドマップ", style = MaterialTheme.typography.titleLarge)
         Text("探索ポイント ${progress.inventory.explorationPoints}", style = MaterialTheme.typography.titleMedium)
-        notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium) }
         Text(
             "同時に探索できる拠点: ${progress.exploration.actives.size} / $capacity" +
                 if (DemoFriends.hasFriends) "(フレンドの協力で最大 3 か所)" else "(フレンドがいると最大 3 か所)",

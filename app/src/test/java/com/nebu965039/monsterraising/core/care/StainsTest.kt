@@ -174,4 +174,92 @@ class StainsTest {
         assertTrue(f.isClean)
         assertEquals(25, guard) // 5 箇所 × 5 回
     }
+
+    // --- 清潔度との整合(10.2.2): 1 箇所 +20 で、5 箇所ならちょうど満タン ---
+
+    @Test
+    fun maxRemaining_isTheNumberOfTwentyPointStepsToFull() {
+        assertEquals(0, StainRules.maxRemaining(100.0))
+        assertEquals(1, StainRules.maxRemaining(99.9))
+        assertEquals(1, StainRules.maxRemaining(80.0))
+        assertEquals(2, StainRules.maxRemaining(79.9))
+        assertEquals(4, StainRules.maxRemaining(20.0))
+        assertEquals(5, StainRules.maxRemaining(19.9))
+        assertEquals(5, StainRules.maxRemaining(0.0))
+    }
+
+    @Test
+    fun fiveStains_cleanedOneByOne_reachExactlyFull() {
+        val f = StainField()
+        var cleanliness = 0.0
+        f.syncToCleanliness(cleanliness)
+        assertEquals(5, f.stains.size)
+        val remaining = mutableListOf<Int>()
+        while (!f.isClean) {
+            repeat(5) { f.oneStroke() } // 1 箇所を消す
+            cleanliness = minOf(100.0, cleanliness + 20.0)
+            f.syncToCleanliness(cleanliness) // 清潔度が上がっても、残りの汚れは減らない・増えない
+            remaining += f.stains.size
+        }
+        assertEquals(listOf(4, 3, 2, 1, 0), remaining)
+        assertEquals(100.0, cleanliness, 1e-9)
+    }
+
+    @Test
+    fun syncToCleanliness_doesNotRemoveStainsJustBecauseTheTableSaysFewer() {
+        val f = StainField()
+        f.syncToCleanliness(0.0) // 5 箇所
+        repeat(5) { f.oneStroke() }
+        f.syncToCleanliness(20.0) // 表では 3 箇所だが、満タンまであと 4 箇所ぶんあるので、4 箇所のまま
+        assertEquals(4, f.stains.size)
+    }
+
+    @Test
+    fun syncToCleanliness_addsStainsAsCleanlinessFalls() {
+        val f = StainField()
+        f.syncToCleanliness(100.0)
+        assertTrue(f.isClean)
+        f.syncToCleanliness(79.9)
+        assertEquals(1, f.stains.size)
+        f.syncToCleanliness(59.9)
+        assertEquals(2, f.stains.size)
+        f.syncToCleanliness(0.0)
+        assertEquals(5, f.stains.size)
+    }
+
+    @Test
+    fun syncToCleanliness_dropsLeftoversWhenCleanlinessJumpsUpBySomethingElse() {
+        val f = StainField()
+        f.syncToCleanliness(0.0)
+        f.syncToCleanliness(100.0) // たとえば、デモの「満タン」
+        assertTrue(f.isClean)
+        val g = StainField()
+        g.syncToCleanliness(0.0)
+        g.syncToCleanliness(50.0) // 満タンまで 50 → 3 箇所まで
+        assertEquals(3, g.stains.size)
+    }
+
+    // --- なでた回数は持ち越さない ---
+
+    @Test
+    fun resetStrokes_clearsTheCounts_butKeepsTheStains() {
+        val f = StainField()
+        f.sync(2)
+        f.oneStroke()
+        f.oneStroke()
+        f.resetStrokes()
+        assertEquals(2, f.stains.size)
+        assertTrue(f.stains.all { it.strokes == 0 })
+    }
+
+    @Test
+    fun afterAReset_aStainNeedsFiveFreshStrokes() {
+        val f = StainField()
+        f.sync(1)
+        repeat(4) { f.oneStroke() }
+        f.resetStrokes()
+        repeat(4) { assertTrue(f.oneStroke().isEmpty()) }
+        assertEquals(listOf(0), f.oneStroke())
+    }
 }
+

@@ -119,6 +119,7 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
             delay(5_000)
             commit { PetSimulator.advance(it, now(), config) }
             exploreTick++
+            care = progressStore.load()
         }
     }
     val overview = remember(resumeTick, exploreTick, DemoClock.offsetMs) { Exploration.overview(progressStore.load(), now()) }

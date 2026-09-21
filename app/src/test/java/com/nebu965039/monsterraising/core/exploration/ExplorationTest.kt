@@ -275,18 +275,27 @@ class ExplorationTest {
         val (a, first) = Exploration.claimLoginBonus(MiniGameProgress(), 10L)
         assertTrue(first)
         assertEquals(100, a.inventory.explorationPoints)
+        assertEquals(1, a.inventory.count(ItemType.RICE)) // ごはんも 1 個補充される
         val (b, second) = Exploration.claimLoginBonus(a, 10L)
         assertFalse(second)
         assertEquals(100, b.inventory.explorationPoints)
+        assertEquals(1, b.inventory.count(ItemType.RICE)) // 同じ日に 2 回は増えない
         val (c, third) = Exploration.claimLoginBonus(b, 11L)
         assertTrue(third)
         assertEquals(200, c.inventory.explorationPoints)
+        assertEquals(2, c.inventory.count(ItemType.RICE))
     }
 
     @Test
     fun aFreshPlayerCanExploreOnceForFreeFromTheLoginBonus() {
         val (p, _) = Exploration.claimLoginBonus(MiniGameProgress(), 1L)
         assertTrue(Exploration.start(p, ExplorationSite.CAVE, ExplorationPlan.SHORT, 0L) is StartResult.Started)
+    }
+
+    @Test
+    fun loginRice_followsTheConfig() {
+        val (p, _) = Exploration.claimLoginBonus(MiniGameProgress(), 1L, ExplorationConfig(loginRice = 3))
+        assertEquals(3, p.inventory.count(ItemType.RICE))
     }
 
     // --- 残り時間の表示 ---

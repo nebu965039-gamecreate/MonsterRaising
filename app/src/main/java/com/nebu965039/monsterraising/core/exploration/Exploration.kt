@@ -43,6 +43,8 @@ data class ExplorationConfig(
     val friendExtraSlots: Int = 2,
     /** ログイン時に付与するポイント(8.2節: 1 日 1 回 100 ポイント) */
     val loginBonus: Int = 100,
+    /** ログイン時に補充するごはんの数(1 日 1 回。暫定: 1 個。満腹度は 1 個で +25、1 日で約 144 減るので、足りない場合は増やす) */
+    val loginRice: Int = 1,
     /** 排出確率(8.3節)。ノーマル(ごはん)、レア(ミニゲーム券)、かなりレア(装備)、超レア(長寿の秘薬)の順に累積して抽選する */
     val normalRate: Double = 0.915,
     val rareRate: Double = 0.05,
@@ -220,11 +222,11 @@ object Exploration {
             ExplorationStatus.InProgress(a.site, a.plan, a.endsAtMs - nowMs)
         }
 
-    /** ログインボーナス(8.2節: 1 日 1 回 100 ポイント)。受け取れたら true。 */
+    /** ログインボーナス(8.2節: 1 日 1 回、探索ポイント 100 とごはん 1 個)。受け取れたら true。 */
     fun claimLoginBonus(progress: MiniGameProgress, day: Long, config: ExplorationConfig = ExplorationConfig()): Pair<MiniGameProgress, Boolean> {
         if (progress.exploration.loginBonusDay == day) return progress to false
         return progress.copy(
-            inventory = progress.inventory.addPoints(config.loginBonus),
+            inventory = progress.inventory.addPoints(config.loginBonus).add(ItemType.RICE, config.loginRice),
             exploration = progress.exploration.copy(loginBonusDay = day),
         ) to true
     }

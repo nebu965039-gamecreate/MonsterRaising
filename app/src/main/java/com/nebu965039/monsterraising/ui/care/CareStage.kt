@@ -91,7 +91,7 @@ fun CareStage(
 
     // 清潔度に応じて汚れが増える(清潔度が下がると新しい汚れが現れる)。卵には汚れはない
     LaunchedEffect(cleanliness, isEgg) {
-        field.sync(if (isEgg) 0 else StainRules.countFor(cleanliness))
+        if (isEgg) field.sync(0) else field.syncToCleanliness(cleanliness)
         fieldTick++
         if (isEgg) cleaning = false
     }
@@ -102,6 +102,13 @@ fun CareStage(
         }
     }
 
+    /** 掃除モードを終える。なでた回数はリセットする(残った汚れは残る) */
+    fun endCleaning() {
+        cleaning = false
+        field.resetStrokes()
+        fieldTick++
+    }
+
     /** 指が [p] にあるときの処理: 汚れがなでられ、5 回で消える。消えた分だけ清潔度を上げる */
     fun touch(p: Offset) {
         val cleaned = field.touch(p.x, p.y, stageSize.width.toFloat(), stageSize.height.toFloat())
@@ -109,12 +116,12 @@ fun CareStage(
         if (cleaned.isEmpty()) return
         repeat(cleaned.size) {
             val newCleanliness = onStainCleanedNow()
-            field.sync(StainRules.countFor(newCleanliness))
+            field.syncToCleanliness(newCleanliness)
         }
         fieldTick++
         // すべての汚れを落としたら、掃除モードを自動で終える
         if (field.isClean) {
-            cleaning = false
+            endCleaning()
             message = "きれいになった!"
         }
     }
@@ -141,9 +148,9 @@ fun CareStage(
                 }
                 .pointerInput(cleaning) {
                     if (cleaning) {
-                        // 汚れ以外の場所をタップしたら、掃除モードを終える(残った汚れ・なでた回数は次回へ持ち越し)
+                        // 汚れ以外の場所をタップしたら、掃除モードを終える(残った汚れは残り、なでた回数はリセット)
                         detectTapGestures(onTap = {
-                            if (!field.hasStainNear(it.x, it.y, stageSize.width.toFloat(), stageSize.height.toFloat())) cleaning = false
+                            if (!field.hasStainNear(it.x, it.y, stageSize.width.toFloat(), stageSize.height.toFloat())) endCleaning()
                         })
                     }
                 },
@@ -218,7 +225,7 @@ fun CareStage(
                 FilterChip(
                     selected = cleaning,
                     enabled = !isEgg,
-                    onClick = { cleaning = !cleaning },
+                    onClick = { if (cleaning) endCleaning() else cleaning = true },
                     label = { Text("🧹 そうじ道具") },
                 )
             }
