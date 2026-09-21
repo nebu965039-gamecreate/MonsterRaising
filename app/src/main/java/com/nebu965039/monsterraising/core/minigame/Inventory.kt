@@ -42,6 +42,12 @@ data class Inventory(
         return copy(explorationPoints = explorationPoints + amount)
     }
 
+    /** 探索ポイントを [amount] 使う。足りなければ null(何も変えない) */
+    fun spendPoints(amount: Int): Inventory? {
+        require(amount >= 0)
+        return if (explorationPoints < amount) null else copy(explorationPoints = explorationPoints - amount)
+    }
+
     /** [amount] 個を使う。足りなければ null(何も変えない) */
     fun consume(item: ItemType, amount: Int = 1): Inventory? {
         require(amount >= 0)

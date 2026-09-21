@@ -69,6 +69,49 @@ class CardRewardsTest {
         assertEquals(2, r.bestStreak)
     }
 
+    // --- 不敗記録(=連勝数)・通算成績 ---
+
+    @Test
+    fun streak_doesNotCountInvalidMatches_butDoesNotBreakEither() {
+        var r = CardRecords()
+        r = r.record(result(MatchOutcome.WIN)).records
+        r = r.record(result(MatchOutcome.DRAW)).records
+        assertEquals(1, r.streak) // 引き分けは数えない
+        r = r.record(result(MatchOutcome.WIN)).records
+        assertEquals(2, r.streak) // 引き分けを挟んでも、次の勝利で続けて数える
+        r = r.record(result(MatchOutcome.LOSE)).records
+        assertEquals(0, r.streak)
+        assertEquals(2, r.bestStreak)
+    }
+
+    @Test
+    fun streak_spansAllOpponents() {
+        var r = CardRecords()
+        r = r.record(result(MatchOutcome.WIN, NpcLevel.BEGINNER)).records
+        r = r.record(result(MatchOutcome.WIN, NpcLevel.INTERMEDIATE)).records
+        r = r.record(result(MatchOutcome.DRAW, NpcLevel.ADVANCED)).records
+        r = r.record(result(MatchOutcome.WIN, NpcLevel.ADVANCED)).records
+        assertEquals(3, r.streak)
+    }
+
+    @Test
+    fun totals_countEveryOutcome() {
+        var r = CardRecords()
+        repeat(3) { r = r.record(result(MatchOutcome.WIN)).records }
+        repeat(2) { r = r.record(result(MatchOutcome.LOSE)).records }
+        r = r.record(result(MatchOutcome.DRAW)).records
+        assertEquals(3, r.totalWins)
+        assertEquals(2, r.totalLosses)
+        assertEquals(1, r.totalDraws)
+    }
+
+    @Test
+    fun oldRecordsWithoutTheNewFieldsStillLoad() {
+        val r = CardRecordsCodec.decode("""{"streak":4,"bestStreak":6,"clearedLevels":["BEGINNER"]}""")!!
+        assertEquals(4, r.streak)
+        assertEquals(0, r.totalWins)
+    }
+
     @Test
     fun opponentsUnlockOneAfterAnother() {
         var r = CardRecords()

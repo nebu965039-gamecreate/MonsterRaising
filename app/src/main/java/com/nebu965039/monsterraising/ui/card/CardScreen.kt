@@ -201,6 +201,10 @@ fun CardScreen() {
                 "連勝 ${records.streak}(最高 ${records.bestStreak})  ${if (records.hasCleared(level)) "クリア済み" else "未クリア"}",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Text(
+                "通算 ${records.totalWins} 勝 ${records.totalLosses} 敗 ${records.totalDraws} 無効",
+                style = MaterialTheme.typography.bodySmall,
+            )
             if (monsterCard != null) {
                 Text("モンスターカード: ${monsterCard.label()} — ${monsterCard.description()}", style = MaterialTheme.typography.bodySmall)
             } else {

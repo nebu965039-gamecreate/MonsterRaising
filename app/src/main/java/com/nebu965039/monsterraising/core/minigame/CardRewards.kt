@@ -76,10 +76,17 @@ data class CardRecordUpdate(
  */
 @Serializable
 data class CardRecords(
-    /** 現在の連勝数(マッチ勝利で +1、敗北で 0、無効試合は変えない。6.5節) */
+    /**
+     * 現在の連勝数(マッチ勝利で +1、敗北で 0、無効試合は数えず、途切れさせもしない。6.5節)。
+     * 引き分けを挟んでも、負けない限り次の勝利で続けて数える。1 回のマッチに限らず通算で数えるので、「通算の不敗記録」でもある。
+     */
     val streak: Int = 0,
     val bestStreak: Int = 0,
     val clearedLevels: Set<String> = emptySet(),
+    /** 通算成績 */
+    val totalWins: Int = 0,
+    val totalLosses: Int = 0,
+    val totalDraws: Int = 0,
 ) {
     fun hasCleared(level: NpcLevel): Boolean = level.name in clearedLevels
 
@@ -96,9 +103,11 @@ data class CardRecords(
                 streak = streak + 1,
                 bestStreak = maxOf(bestStreak, streak + 1),
                 clearedLevels = clearedLevels + result.level.name,
+                totalWins = totalWins + 1,
             )
-            MatchOutcome.LOSE -> copy(streak = 0)
-            MatchOutcome.DRAW -> this // 無効試合は連勝数・勝敗に影響しない(6.2節)
+            MatchOutcome.LOSE -> copy(streak = 0, totalLosses = totalLosses + 1)
+            // 無効試合は連勝数・勝敗に影響しない(6.2節)。負けたことにはならないので、連勝は途切れず、数も増えない
+            MatchOutcome.DRAW -> copy(totalDraws = totalDraws + 1)
         }
         val firstClear = result.outcome == MatchOutcome.WIN && !before.hasCleared(result.level)
         val unlocked = NpcLevel.entries.firstOrNull { !before.isUnlocked(it) && next.isUnlocked(it) }

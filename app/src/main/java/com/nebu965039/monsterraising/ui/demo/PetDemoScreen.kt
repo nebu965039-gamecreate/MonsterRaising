@@ -1,5 +1,8 @@
 package com.nebu965039.monsterraising.ui.demo
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,10 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.nebu965039.monsterraising.core.exploration.Exploration
 import com.nebu965039.monsterraising.core.pet.DeathCause
 import com.nebu965039.monsterraising.core.pet.PetAppearance
 import com.nebu965039.monsterraising.core.pet.PetConfig
@@ -41,6 +47,7 @@ import com.nebu965039.monsterraising.core.pet.PetSimulator
 import com.nebu965039.monsterraising.core.pet.PetState
 import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
+import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
 import com.nebu965039.monsterraising.ui.common.label
 import com.nebu965039.monsterraising.widget.PetWidgetUpdater
@@ -54,6 +61,10 @@ import kotlinx.coroutines.withContext
 private val config = PetConfig()
 
 private const val HOUR_MS = 3_600_000L
+
+/** 探索中にこの画面を開いたとき、キャラクターが画面の外から戻ってくるまでの待ち時間と、歩いて戻る時間(8.6節) */
+private const val RETURN_DELAY_MS = 3_000L
+private const val RETURN_DURATION_MS = 2_500
 private const val DAY_MS = 24 * HOUR_MS
 
 /**
@@ -94,10 +105,27 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
 
     // ウィジェットで操作して戻ってきたときなど、アプリが前面に戻るたびに読み直す
     LaunchedEffect(resumeTick) { commit { PetSimulator.advance(it, now(), config) } }
+    // 探索中の状況(8.6節)。前面に戻ったとき・5 秒ごとに読み直す
+    val progressStore = remember { MiniGameStore(context) }
+    var exploreTick by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(5_000)
             commit { PetSimulator.advance(it, now(), config) }
+            exploreTick++
+        }
+    }
+    val overview = remember(resumeTick, exploreTick, DemoClock.offsetMs) { Exploration.overview(progressStore.load(), now()) }
+    val exploring = overview.inProgress.isNotEmpty()
+    // 探索中にこの画面を表示すると、しばらくしてから画面の外(右)から歩いて戻ってくる。0 = 定位置、1 = 画面の外
+    val comeBack = remember { Animatable(0f) }
+    LaunchedEffect(resumeTick, exploring) {
+        if (exploring) {
+            comeBack.snapTo(1f)
+            delay(RETURN_DELAY_MS)
+            comeBack.animateTo(0f, tween(RETURN_DURATION_MS, easing = LinearEasing))
+        } else {
+            comeBack.snapTo(0f)
         }
     }
 
@@ -119,17 +147,25 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
         val base = PetAppearance.baseAnimation(pet.stats, config)
         BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             val availablePx = with(LocalDensity.current) { (maxWidth * 0.6f).roundToPx() }
+            val offscreenPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val arriving = exploring && comeBack.value > 0f
             val scale = SpriteTimeline.integerScale(availablePx, loaded.definition.size)
             Box(Modifier.background(Color(0xFFC8DCC8))) {
+                // 戻ってくる間は、左向き(進行方向)にして歩く
+                Box(Modifier.graphicsLayer { translationX = comeBack.value * offscreenPx; scaleX = if (arriving) -1f else 1f }) {
                 key(shotToken) {
                     SpritePlayer(
                         loaded,
-                        animation = oneShot ?: base,
+                        animation = if (arriving) "walk" else (oneShot ?: base),
                         scale = scale,
                         onFrameChanged = { if (oneShot != null && it.animation == "idle") oneShot = null },
                     )
                 }
+                }
             }
+        }
+        Exploration.summaryLine(overview)?.let {
+            Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
         }
         Text(
             "${pet.generation}代目  段階: ${pet.stage.label()}   (表示: ${oneShot ?: base})",

@@ -52,6 +52,14 @@ class PetWidgetModelTest {
     }
 
     @Test
+    fun explorationNote_isPassedThrough_andNullByDefault() {
+        val state = PetState(PetStats(100.0, 100.0, 50.0), Stage.INFANT, 0L, 0L)
+        assertNull(PetWidgetModel.of(state).explorationNote)
+        assertEquals("探索中(残り 30分)", PetWidgetModel.of(state, explorationNote = "探索中(残り 30分)").explorationNote)
+        assertEquals("探索完了!", PetWidgetModel.of(state, explorationNote = "探索完了!").explorationNote)
+    }
+
+    @Test
     fun generationAndStageArePassedThrough() {
         val m = model(PetStats(100.0, 100.0, 50.0), stage = Stage.GROWTH_2, generation = 3)
         assertEquals(3, m.generation)

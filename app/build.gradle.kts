@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(project(":minigames:puzzle"))
     implementation(project(":minigames:card"))
+    implementation(project(":minigames:wallbreak"))
 
     debugImplementation(libs.androidx.ui.tooling)
 
