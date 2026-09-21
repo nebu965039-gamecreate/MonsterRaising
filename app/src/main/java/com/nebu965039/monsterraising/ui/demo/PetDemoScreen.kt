@@ -43,6 +43,8 @@ import com.nebu965039.monsterraising.core.pet.PetState
 import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.ui.common.label
+import com.nebu965039.monsterraising.widget.PetWidgetUpdater
 import com.nebu965039.monsterraising.ui.sprite.LoadedSprite
 import com.nebu965039.monsterraising.ui.sprite.SpriteAssets
 import com.nebu965039.monsterraising.ui.sprite.SpritePlayer
@@ -52,19 +54,8 @@ import kotlinx.coroutines.withContext
 
 private val config = PetConfig()
 
-// 餌の回復量は 4.1 の +20〜30 の中間。掃除は汚れ 1 箇所ぶん(10.2.2)。実際の汚れ操作は後のフェーズで実装する
-private const val FEED_AMOUNT = 25.0
-
 private const val HOUR_MS = 3_600_000L
 private const val DAY_MS = 24 * HOUR_MS
-
-private fun Stage.label() = when (this) {
-    Stage.EGG -> "卵"
-    Stage.INFANT -> "幼年期"
-    Stage.GROWTH_1 -> "成長期Ⅰ"
-    Stage.GROWTH_2 -> "成長期Ⅱ"
-    Stage.MATURE -> "成熟期"
-}
 
 /**
  * Phase 2 の動作確認用画面。お世話→ステータス変化→進化までを試す。
@@ -73,7 +64,7 @@ private fun Stage.label() = when (this) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PetDemoScreen(characterId: String = "fox") {
+fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
     val context = LocalContext.current
     val store = remember { PetStore(context) }
     val sprite by produceState<LoadedSprite?>(null, characterId) {
@@ -83,14 +74,16 @@ fun PetDemoScreen(characterId: String = "fox") {
     fun now() = System.currentTimeMillis() + offsetMs
 
     var pet by remember {
-        mutableStateOf(PetSimulator.advance(store.load() ?: PetState.newEgg(now(), config), now(), config))
+        mutableStateOf(store.update(now(), config) { PetSimulator.advance(it, now(), config) })
     }
     // 単発の演出(食事・なでる)。終わって idle に戻ったら基本アニメーションへ戻す
     var oneShot by remember { mutableStateOf<String?>(null) }
     var shotToken by remember { mutableIntStateOf(0) }
 
     var notice by remember { mutableStateOf<String?>(null) }
-    fun commit(next: PetState) {
+    // 最新の保存状態(ウィジェットの操作を含む)を読んで更新し、ウィジェットにも反映する
+    fun commit(op: (PetState) -> PetState) {
+        val next = store.update(now(), config, op)
         if (next.generation > pet.generation) {
             notice = when (next.lastDeathCause) {
                 DeathCause.OLD_AGE -> "寿命を迎えました。卵を残しました(${next.generation}代目。先代の有効度の5%を引き継ぎ)"
@@ -98,13 +91,15 @@ fun PetDemoScreen(characterId: String = "fox") {
             }
         }
         pet = next
+        PetWidgetUpdater.updateAll(context)
     }
 
-    LaunchedEffect(pet) { withContext(Dispatchers.IO) { store.save(pet) } }
+    // ウィジェットで操作して戻ってきたときなど、アプリが前面に戻るたびに読み直す
+    LaunchedEffect(resumeTick) { commit { PetSimulator.advance(it, now(), config) } }
     LaunchedEffect(Unit) {
         while (true) {
             delay(5_000)
-            commit(PetSimulator.advance(pet, now(), config))
+            commit { PetSimulator.advance(it, now(), config) }
         }
     }
 
@@ -170,42 +165,48 @@ fun PetDemoScreen(characterId: String = "fox") {
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !isEgg, onClick = {
-                commit(PetSimulator.feed(pet, now(), FEED_AMOUNT, config))
+                commit { PetSimulator.feed(it, now(), config.feedGain, config) }
                 play("eat")
-            }) { Text("餌(+${FEED_AMOUNT.toInt()})") }
-            Button(enabled = !isEgg, onClick = { commit(PetSimulator.clean(pet, now(), config.cleanGainPerStain, config)) }) {
+            }) { Text("餌(+${config.feedGain.toInt()})") }
+            Button(enabled = !isEgg, onClick = { commit { PetSimulator.clean(it, now(), config.cleanGainPerStain, config) } }) {
                 Text("掃除(+${config.cleanGainPerStain.toInt()})")
             }
             Button(enabled = !isEgg, onClick = {
-                commit(PetSimulator.pet(pet, now(), config))
+                commit { PetSimulator.pet(it, now(), config) }
                 play("happy")
             }) { Text("なでる(+${config.petMoodGain.toInt()})") }
         }
         Text("デモ用の操作", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled = !isEgg, onClick = {
-                commit(PetSimulator.act(pet, now(), config) { it.copy(satiety = 100.0, cleanliness = 100.0) })
+                commit { PetSimulator.act(it, now(), config) { s -> s.copy(satiety = 100.0, cleanliness = 100.0) } }
             }) { Text("満腹度・清潔度を満タン") }
             OutlinedButton(enabled = !isEgg, onClick = {
-                commit(PetSimulator.act(pet, now(), config) { it.addIntellect(50.0) })
+                commit { PetSimulator.act(it, now(), config) { s -> s.addIntellect(50.0) } }
             }) { Text("知力 +50") }
             OutlinedButton(enabled = !isEgg, onClick = {
-                commit(PetSimulator.act(pet, now(), config) { it.addStrength(50.0) })
+                commit { PetSimulator.act(it, now(), config) { s -> s.addStrength(50.0) } }
             }) { Text("筋力 +50") }
             OutlinedButton(enabled = pet.stage == Stage.MATURE, onClick = {
-                commit(PetSimulator.extendLifespan(pet, now(), config))
+                commit { PetSimulator.extendLifespan(it, now(), config) }
             }) { Text("長寿の秘薬(+7日)") }
         }
         Text("時間を進める(仮想時計 +${offsetMs / HOUR_MS}時間)", style = MaterialTheme.typography.labelLarge)
+        if (offsetMs != 0L) {
+            Text(
+                "仮想時計の使用中は、実時間で動くウィジェットの表示と食い違います(「卵からやり直す」で戻ります)",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { offsetMs += HOUR_MS; commit(PetSimulator.advance(pet, now(), config)) }) { Text("+1時間") }
-            OutlinedButton(onClick = { offsetMs += DAY_MS; commit(PetSimulator.advance(pet, now(), config)) }) { Text("+1日") }
-            OutlinedButton(onClick = { offsetMs += 60_000L; commit(PetSimulator.advance(pet, now(), config)) }) { Text("+1分") }
+            OutlinedButton(onClick = { offsetMs += HOUR_MS; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1時間") }
+            OutlinedButton(onClick = { offsetMs += DAY_MS; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1日") }
+            OutlinedButton(onClick = { offsetMs += 60_000L; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1分") }
             OutlinedButton(onClick = {
                 offsetMs = 0L
                 store.clear()
                 notice = null
-                pet = PetState.newEgg(now(), config)
+                commit { PetState.newEgg(now(), config) }
             }) { Text("卵からやり直す") }
         }
         Text(

@@ -1,0 +1,53 @@
+package com.nebu965039.monsterraising.core.widget
+
+import com.nebu965039.monsterraising.core.pet.PetAppearance
+import com.nebu965039.monsterraising.core.pet.PetConfig
+import com.nebu965039.monsterraising.core.pet.PetState
+import com.nebu965039.monsterraising.core.pet.Stage
+import kotlin.math.roundToInt
+
+/**
+ * ウィジェットに表示する内容(UI・Android 非依存)。
+ * ウィジェットは静止画の切り替えのみ(基本設計書3.1・ロードマップ Phase 3)なので、状態から 1 枚のフレームを選ぶ。
+ */
+data class PetWidgetModel(
+    /** 表示するフレームのキー(キャラクター定義の frames のキー) */
+    val frameKey: String,
+    val generation: Int,
+    val stage: Stage,
+    /** 卵はステータスを持たず、お世話もできない */
+    val isEgg: Boolean,
+    /** ステータスの 10 段階ドット表示(4.7節)。卵は null */
+    val satietyDots: Int?,
+    val cleanlinessDots: Int?,
+    val moodDots: Int?,
+) {
+    companion object {
+        const val DOT_MAX = 10
+
+        fun of(state: PetState, config: PetConfig = PetConfig()): PetWidgetModel {
+            val isEgg = state.stage == Stage.EGG
+            return PetWidgetModel(
+                frameKey = if (isEgg) FRAME_NORMAL else frameFor(PetAppearance.baseAnimation(state.stats, config)),
+                generation = state.generation,
+                stage = state.stage,
+                isEgg = isEgg,
+                satietyDots = if (isEgg) null else dots(state.stats.satiety),
+                cleanlinessDots = if (isEgg) null else dots(state.stats.cleanliness),
+                moodDots = if (isEgg) null else dots(state.stats.mood),
+            )
+        }
+
+        /** 内部値 0〜100 を、10 段階のドット数(0〜10)に丸める(4.7節) */
+        fun dots(value: Double): Int = (value / 10.0).roundToInt().coerceIn(0, DOT_MAX)
+
+        private const val FRAME_NORMAL = "normal"
+
+        /** 基本アニメーション名から、静止画のフレームキーへ */
+        private fun frameFor(animation: String): String = when (animation) {
+            PetAppearance.SAD -> "sad"
+            PetAppearance.DIRTY -> "dirty"
+            else -> FRAME_NORMAL
+        }
+    }
+}

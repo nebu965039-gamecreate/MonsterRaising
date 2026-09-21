@@ -1,3 +1,14 @@
 <resources>
     <string name="app_name">MonsterRaising</string>
+
+    <string name="widget_label">MonsterRaising</string>
+    <string name="widget_description">育てているモンスターの様子を見て、餌・掃除・なでるができます</string>
+    <string name="widget_image_description">モンスター(タップでアプリを開く)</string>
+    <string name="widget_egg_note">卵(もうすぐ生まれます)</string>
+    <string name="widget_feed">餌</string>
+    <string name="widget_clean">掃除</string>
+    <string name="widget_pet">なでる</string>
+    <string name="gauge_satiety">満腹</string>
+    <string name="gauge_cleanliness">清潔</string>
+    <string name="gauge_mood">機嫌</string>
 </resources>

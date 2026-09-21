@@ -19,6 +19,8 @@ data class PetConfig(
     val deathSatietyZeroHours: Double = 24.0,
     /** 放置による死亡: そのとき清潔度がこの値以下(4.4: 20%) */
     val deathCleanlinessMax: Double = 20.0,
+    /** 餌やり 1 回の満腹度の回復(4.1: +20〜30 の中間。ウィジェットの簡易餌やりと本体アプリで共通) */
+    val feedGain: Double = 25.0,
     /** 掃除で汚れ 1 箇所を落とすごとの清潔度の回復(10.2.2: +20。5 箇所で満了) */
     val cleanGainPerStain: Double = 20.0,
     /** なでる(4.1: 機嫌 +10) */

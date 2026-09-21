@@ -37,7 +37,7 @@ version: 0.1(初版・アジャイル運用前提のたたき台)
 | 領域 | 採用technology | 備考 |
 |---|---|---|
 | 本体アプリUI | Jetpack Compose | |
-| ウィジェット | RemoteViews または Glance | 差分画像切り替え方式(後述)を採用するためRemoteViewsでも実装可能 |
+| ウィジェット | **RemoteViews(採用)** | 差分画像切り替え方式(後述)のため RemoteViews で実装できる。追加依存が不要で、事前に整数倍へ拡大したビットマップを補間なしで表示できる。Glance は将来の見直し候補 |
 | ウィジェット定期更新 | WorkManager / AlarmManager | |
 | 認証 | Firebase Authentication | 無料枠:月間アクティブユーザー5万人まで |
 | データ同期 | Cloud Firestore | 無料枠:1GBストレージ、1日5万読取/2万書込 |
