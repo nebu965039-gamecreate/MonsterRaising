@@ -73,6 +73,8 @@ private data class MatchSummary(
     val applied: Boolean,
     val streak: Int,
     val bestStreak: Int,
+    val unbeaten: Int,
+    val bestUnbeaten: Int,
     val newlyUnlocked: NpcLevel?,
     val capped: Boolean,
     val rewards: ClearRewards?,
@@ -146,6 +148,8 @@ fun CardScreen() {
             applied = before != null && before.stage != Stage.EGG && after.generation == before.generation,
             streak = update.records.streak,
             bestStreak = update.records.bestStreak,
+            unbeaten = update.records.unbeaten,
+            bestUnbeaten = update.records.bestUnbeaten,
             newlyUnlocked = update.newlyUnlocked,
             capped = settlement.capped,
             rewards = settlement.rewards,
@@ -198,8 +202,12 @@ fun CardScreen() {
             }
             NpcSilhouette(level, Modifier.size(96.dp))
             Text(
-                "連勝 ${records.streak}(最高 ${records.bestStreak})  ${if (records.hasCleared(level)) "クリア済み" else "未クリア"}",
+                "連勝 ${records.streak}(最高 ${records.bestStreak})  不敗 ${records.unbeaten}(最高 ${records.bestUnbeaten})  ${if (records.hasCleared(level)) "クリア済み" else "未クリア"}",
                 style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "通算 ${records.totalWins} 勝 ${records.totalLosses} 敗 ${records.totalDraws} 無効",
+                style = MaterialTheme.typography.bodySmall,
             )
             if (monsterCard != null) {
                 Text("モンスターカード: ${monsterCard.label()} — ${monsterCard.description()}", style = MaterialTheme.typography.bodySmall)
@@ -336,7 +344,7 @@ private fun ResultView(summary: MatchSummary, canRetry: Boolean, onRetry: () -> 
         r.monsterCard?.let {
             Text("モンスターカード「${it.label()}」: ${if (r.monsterCardUsed) "使った" else "使わなかった"}", style = MaterialTheme.typography.bodyMedium)
         }
-        Text("連勝 ${summary.streak}(最高 ${summary.bestStreak})", style = MaterialTheme.typography.bodyMedium)
+        Text("連勝 ${summary.streak}(最高 ${summary.bestStreak})  不敗 ${summary.unbeaten}(最高 ${summary.bestUnbeaten})", style = MaterialTheme.typography.bodyMedium)
         summary.newlyUnlocked?.let { Text("${it.label()} が解放されました!", color = MaterialTheme.colorScheme.primary) }
         Text(
             if (summary.applied) {
