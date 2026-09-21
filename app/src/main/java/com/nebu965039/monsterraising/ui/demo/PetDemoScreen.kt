@@ -24,7 +24,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -70,8 +69,7 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
     val sprite by produceState<LoadedSprite?>(null, characterId) {
         value = withContext(Dispatchers.IO) { SpriteAssets.load(context, characterId) }
     }
-    var offsetMs by remember { mutableLongStateOf(0L) }
-    fun now() = System.currentTimeMillis() + offsetMs
+    fun now() = DemoClock.now()
 
     var pet by remember {
         mutableStateOf(store.update(now(), config) { PetSimulator.advance(it, now(), config) })
@@ -191,19 +189,19 @@ fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
                 commit { PetSimulator.extendLifespan(it, now(), config) }
             }) { Text("長寿の秘薬(+7日)") }
         }
-        Text("時間を進める(仮想時計 +${offsetMs / HOUR_MS}時間)", style = MaterialTheme.typography.labelLarge)
-        if (offsetMs != 0L) {
+        Text("時間を進める(仮想時計 +${DemoClock.offsetMs / HOUR_MS}時間)", style = MaterialTheme.typography.labelLarge)
+        if (DemoClock.offsetMs != 0L) {
             Text(
                 "仮想時計の使用中は、実時間で動くウィジェットの表示と食い違います(「卵からやり直す」で戻ります)",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { offsetMs += HOUR_MS; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1時間") }
-            OutlinedButton(onClick = { offsetMs += DAY_MS; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1日") }
-            OutlinedButton(onClick = { offsetMs += 60_000L; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1分") }
+            OutlinedButton(onClick = { DemoClock.offsetMs += HOUR_MS; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1時間") }
+            OutlinedButton(onClick = { DemoClock.offsetMs += DAY_MS; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1日") }
+            OutlinedButton(onClick = { DemoClock.offsetMs += 60_000L; commit { PetSimulator.advance(it, now(), config) } }) { Text("+1分") }
             OutlinedButton(onClick = {
-                offsetMs = 0L
+                DemoClock.offsetMs = 0L
                 store.clear()
                 notice = null
                 commit { PetState.newEgg(now(), config) }

@@ -60,6 +60,7 @@ MonsterRaising/
 ├── docs/
 │   └── basic-design.md   # 基本設計書(このリポジトリでの正)
 ├── app/                  # Androidアプリ本体
+├── minigames/            # ミニゲームのロジック(ゲームごとに独立した純粋なKotlinモジュール)
 └── ...
 ```
 

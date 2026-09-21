@@ -1,5 +1,6 @@
 package com.nebu965039.monsterraising.core.pet
 
+import com.nebu965039.monsterraising.core.minigame.MinigameGains
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -77,6 +78,10 @@ object PetSimulator {
 
     fun pet(state: PetState, nowMs: Long, config: PetConfig = PetConfig()) =
         act(state, nowMs, config) { it.addMood(config.petMoodGain) }
+
+    /** ミニゲームの結果を有効度(知力系・筋力系)と機嫌へ反映する(4.1節・5.4節)。卵は遊べないので反映されない。 */
+    fun applyMinigame(state: PetState, nowMs: Long, gains: MinigameGains, config: PetConfig = PetConfig()) =
+        act(state, nowMs, config) { it.addIntellect(gains.intellect).addStrength(gains.strength).addMood(gains.mood) }
 
     /**
      * 「長寿の秘薬」を使う(4.5節): 寿命が 1 週間延びる。成熟期のみ有効。
