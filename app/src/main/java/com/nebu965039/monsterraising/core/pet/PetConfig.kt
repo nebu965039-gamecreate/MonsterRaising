@@ -5,8 +5,8 @@ package com.nebu965039.monsterraising.core.pet
  * 「目安」「例」とされているもの・未決のものは実装後のプレイテストで調整する(設計書12節)。
  */
 data class PetConfig(
-    /** 満腹度の自然減少(4.1: 目安 -1/時間) */
-    val satietyDecayPerHour: Double = 1.0,
+    /** 満腹度の自然減少(4.1: 10 分ごとに -1 = -6/時間) */
+    val satietyDecayPerHour: Double = 6.0,
     /** 清潔度の自然減少(4.1: 目安 -0.7/時間) */
     val cleanlinessDecayPerHour: Double = 0.7,
     /** オフライン計算で減少に反映する経過時間の上限(4.1: 例 24時間) */
@@ -15,6 +15,12 @@ data class PetConfig(
     val cleanGainPerStain: Double = 20.0,
     /** なでる(4.1: 機嫌 +10) */
     val petMoodGain: Double = 10.0,
+    /** 餌やりで上がる機嫌(4.1)。設計書に数値がないため暫定値 */
+    val feedMoodGain: Double = 5.0,
+    /** 満腹度・清潔度のどちらかがこの値を下回っている間、機嫌が下がる(4.1) */
+    val moodDecayGaugeThreshold: Double = 60.0,
+    /** 上の状態の間の機嫌の減少(4.1: -5/時間) */
+    val moodDecayPerHour: Double = 5.0,
     /** 進化に必要な満腹度・清潔度(4.3: 例 60) */
     val evolutionMinGauge: Double = 60.0,
     /** この値以下で sad 系の表示になる機嫌(4.6: 機嫌 30 以下) */

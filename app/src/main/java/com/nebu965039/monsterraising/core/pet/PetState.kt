@@ -32,7 +32,7 @@ object PetSimulator {
         evolve(decay(state, nowMs, config), nowMs, config)
 
     fun feed(state: PetState, nowMs: Long, amount: Double, config: PetConfig = PetConfig()) =
-        act(state, nowMs, config) { it.feed(amount) }
+        act(state, nowMs, config) { it.feed(amount).addMood(config.feedMoodGain) }
 
     fun clean(state: PetState, nowMs: Long, amount: Double, config: PetConfig = PetConfig()) =
         act(state, nowMs, config) { it.clean(amount) }
@@ -54,11 +54,30 @@ object PetSimulator {
         if (state.stage == Stage.EGG) return state.copy(lastUpdatedMs = nowMs)
         val elapsed = (nowMs - state.lastUpdatedMs).coerceAtLeast(0L).coerceAtMost(config.decayCapMs)
         val hours = elapsed / PetConfig.MS_PER_HOUR
+        val hoursBelow = hoursBelowThreshold(state.stats, hours, config)
         val stats = state.stats.copy(
             satiety = PetStats.clampGauge(state.stats.satiety - config.satietyDecayPerHour * hours),
             cleanliness = PetStats.clampGauge(state.stats.cleanliness - config.cleanlinessDecayPerHour * hours),
+            mood = PetStats.clampGauge(state.stats.mood - config.moodDecayPerHour * hoursBelow),
         )
         return state.copy(stats = stats, lastUpdatedMs = nowMs)
+    }
+
+    /**
+     * 経過 [hours] のうち、満腹度・清潔度のどちらかが基準を下回っている時間(4.1: 機嫌が下がる期間)。
+     * どちらも直線的に減るので、先に下回る側の時刻から経過の終わりまでが対象。
+     */
+    private fun hoursBelowThreshold(stats: PetStats, hours: Double, config: PetConfig): Double {
+        fun timeUntilBelow(value: Double, ratePerHour: Double): Double = when {
+            value < config.moodDecayGaugeThreshold -> 0.0
+            ratePerHour <= 0.0 -> Double.POSITIVE_INFINITY
+            else -> (value - config.moodDecayGaugeThreshold) / ratePerHour
+        }
+        val first = minOf(
+            timeUntilBelow(stats.satiety, config.satietyDecayPerHour),
+            timeUntilBelow(stats.cleanliness, config.cleanlinessDecayPerHour),
+        )
+        return (hours - first).coerceAtLeast(0.0)
     }
 
     /** 1 回の呼び出しで進む段階は 1 つまで。新しい段階の開始時刻は判定時点([nowMs])とする。 */

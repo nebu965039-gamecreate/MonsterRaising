@@ -22,18 +22,18 @@ class PetSimulatorTest {
 
     @Test
     fun decay_perHour() {
-        val s = PetSimulator.advance(state(), 10 * hour, config)
-        assertEquals(90.0, s.stats.satiety, 1e-9)
-        assertEquals(93.0, s.stats.cleanliness, 1e-9)
-        assertEquals(50.0, s.stats.mood, 1e-9) // 機嫌は自然減少しない(連動式は未決)
-        assertEquals(10 * hour, s.lastUpdatedMs)
+        val s = PetSimulator.advance(state(), 2 * hour, config)
+        assertEquals(88.0, s.stats.satiety, 1e-9) // 10分ごとに -1 = 1時間で -6
+        assertEquals(98.6, s.stats.cleanliness, 1e-9)
+        assertEquals(50.0, s.stats.mood, 1e-9) // 基準以上の間は機嫌は減らない
+        assertEquals(2 * hour, s.lastUpdatedMs)
     }
 
     @Test
     fun decay_isCappedAt24Hours() {
         val s = PetSimulator.advance(state(), 100 * hour, config)
-        assertEquals(76.0, s.stats.satiety, 1e-9)
-        assertEquals(100.0 - 0.7 * 24, s.stats.cleanliness, 1e-9)
+        assertEquals(0.0, s.stats.satiety, 1e-9) // 24時間で 144 減 → 0 に張り付く
+        assertEquals(100.0 - 0.7 * 24, s.stats.cleanliness, 1e-9) // 100時間ぶんではなく 24時間ぶんだけ
     }
 
     @Test
@@ -49,6 +49,52 @@ class PetSimulatorTest {
         assertEquals(50.0, s.stats.satiety, 1e-9)
     }
 
+    // --- 機嫌の減少(4.1: 満腹度・清潔度のどちらかが60を下回っている間 -5/時間) ---
+
+    @Test
+    fun mood_doesNotDropWhileBothGaugesAtOrAboveThreshold() {
+        val s = PetSimulator.advance(state(satiety = 100.0, cleanliness = 100.0), 6 * hour, config) // 満腹度は 64 まで
+        assertEquals(50.0, s.stats.mood, 1e-9)
+    }
+
+    @Test
+    fun mood_dropsForWholeWindowWhenSatietyAlreadyBelow() {
+        val s = PetSimulator.advance(state(satiety = 50.0, mood = 50.0), 2 * hour, config)
+        assertEquals(40.0, s.stats.mood, 1e-9) // 2時間 × -5
+    }
+
+    @Test
+    fun mood_dropsOnlyAfterSatietyCrossesThreshold() {
+        // 66 → 3時間後に 48。60 を下回るのは 1時間後以降なので、下回っている時間は 2時間
+        val s = PetSimulator.advance(state(satiety = 66.0, mood = 50.0), 3 * hour, config)
+        assertEquals(40.0, s.stats.mood, 1e-9)
+    }
+
+    @Test
+    fun mood_dropsWhenCleanlinessBelowThreshold() {
+        val s = PetSimulator.advance(state(satiety = 100.0, cleanliness = 50.0, mood = 50.0), 2 * hour, config)
+        assertEquals(40.0, s.stats.mood, 1e-9)
+    }
+
+    @Test
+    fun mood_dropsFromTheEarlierOfTheTwoCrossings() {
+        // 清潔度 61 は (1/0.7) 時間後に 60 を下回る。満腹度 100 は約 6.7 時間後。5時間の窓では清潔度側が先
+        val s = PetSimulator.advance(state(satiety = 100.0, cleanliness = 61.0, mood = 50.0), 5 * hour, config)
+        assertEquals(50.0 - 5.0 * (5.0 - 1.0 / 0.7), s.stats.mood, 1e-9)
+    }
+
+    @Test
+    fun mood_clampsAtZero() {
+        val s = PetSimulator.advance(state(satiety = 10.0, mood = 5.0), 3 * hour, config)
+        assertEquals(0.0, s.stats.mood, 1e-9)
+    }
+
+    @Test
+    fun mood_doesNotDropForEgg() {
+        val egg = PetState(PetStats(10.0, 10.0, 50.0), Stage.EGG, 0L, 0L)
+        assertEquals(50.0, PetSimulator.advance(egg, 30_000L, config).stats.mood, 1e-9)
+    }
+
     // --- お世話 ---
 
     @Test
@@ -59,14 +105,20 @@ class PetSimulatorTest {
 
     @Test
     fun feed_appliesDecayFirst() {
-        val s = PetSimulator.feed(state(satiety = 50.0), 10 * hour, 20.0, config)
-        assertEquals(60.0, s.stats.satiety, 1e-9) // 50 - 10 + 20
+        val s = PetSimulator.feed(state(satiety = 50.0), 1 * hour, 20.0, config)
+        assertEquals(64.0, s.stats.satiety, 1e-9) // 50 - 6 + 20
     }
 
     @Test
     fun clean_addsAmount() {
         val s = PetSimulator.clean(state(cleanliness = 40.0), 0, 20.0, config)
         assertEquals(60.0, s.stats.cleanliness, 1e-9)
+    }
+
+    @Test
+    fun feed_raisesMood() {
+        val s = PetSimulator.feed(state(mood = 40.0), 0, 20.0, config)
+        assertEquals(45.0, s.stats.mood, 1e-9)
     }
 
     @Test
@@ -214,7 +266,7 @@ class PetSimulatorTest {
     @Test
     fun infant_decaysFromHatchTime() {
         val hatched = PetSimulator.advance(PetState.newEgg(0L, config), 60_000L, config)
-        val s = PetSimulator.advance(hatched, 60_000L + 10 * hour, config)
-        assertEquals(90.0, s.stats.satiety, 1e-9)
+        val s = PetSimulator.advance(hatched, 60_000L + 5 * hour, config)
+        assertEquals(70.0, s.stats.satiety, 1e-9)
     }
 }
