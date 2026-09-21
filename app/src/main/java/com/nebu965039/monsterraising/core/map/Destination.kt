@@ -22,6 +22,15 @@ sealed interface Destination {
     /** 探索拠点の画面 */
     data class Site(val site: ExplorationSite) : Destination
 
+    /** 図鑑画面(10.5節) */
+    data object Dex : Destination
+
+    /** フレンド画面(9節) */
+    data object Friends : Destination
+
+    /** 設定画面(10.1節) */
+    data object Settings : Destination
+
     /** 開発用(動作確認用の操作・アニメーション確認) */
     data object Dev : Destination
 
@@ -33,7 +42,7 @@ sealed interface Destination {
             GameSelect -> WorldMap
             is Game -> GameSelect
             is Site -> WorldMap
-            Dev -> Home
+            Dex, Friends, Settings, Dev -> Home
         }
 
     /** 保存用の文字列 */
@@ -44,6 +53,9 @@ sealed interface Destination {
             GameSelect -> "games"
             is Game -> "game:${game.name}"
             is Site -> "site:${site.name}"
+            Dex -> "dex"
+            Friends -> "friends"
+            Settings -> "settings"
             Dev -> "dev"
         }
 
@@ -54,6 +66,9 @@ sealed interface Destination {
             key == "map" -> WorldMap
             key == "games" -> GameSelect
             key == "dev" -> Dev
+            key == "dex" -> Dex
+            key == "friends" -> Friends
+            key == "settings" -> Settings
             key.startsWith("game:") -> runCatching { Game(MiniGame.valueOf(key.removePrefix("game:"))) }.getOrNull()
             key.startsWith("site:") -> runCatching { Site(ExplorationSite.valueOf(key.removePrefix("site:"))) }.getOrNull()
             else -> null

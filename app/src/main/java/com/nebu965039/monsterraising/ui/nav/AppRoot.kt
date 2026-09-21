@@ -27,11 +27,17 @@ import com.nebu965039.monsterraising.core.exploration.ExplorationConfig
 import com.nebu965039.monsterraising.core.map.Destination
 import com.nebu965039.monsterraising.core.minigame.DayClock
 import com.nebu965039.monsterraising.core.minigame.MiniGame
+import com.nebu965039.monsterraising.core.dex.Dex
 import com.nebu965039.monsterraising.data.MiniGameStore
+import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.data.dexStore
 import com.nebu965039.monsterraising.ui.card.CardScreen
 import com.nebu965039.monsterraising.ui.demo.DemoClock
 import com.nebu965039.monsterraising.ui.demo.PetDemoScreen
 import com.nebu965039.monsterraising.ui.dev.DevScreen
+import com.nebu965039.monsterraising.ui.dex.DexScreen
+import com.nebu965039.monsterraising.ui.friends.FriendsScreen
+import com.nebu965039.monsterraising.ui.settings.SettingsScreen
 import com.nebu965039.monsterraising.ui.game.GameSelectScreen
 import com.nebu965039.monsterraising.ui.game.title
 import com.nebu965039.monsterraising.ui.map.ExplorationSiteScreen
@@ -47,6 +53,9 @@ private fun Destination.title(): String = when (this) {
     Destination.GameSelect -> "ゲーム拠点"
     is Destination.Game -> game.title()
     is Destination.Site -> site.displayName
+    Destination.Dex -> "図鑑"
+    Destination.Friends -> "フレンド"
+    Destination.Settings -> "設定"
     Destination.Dev -> "開発用"
 }
 
@@ -72,6 +81,7 @@ fun AppRoot(resumeTick: Int) {
     LaunchedEffect(resumeTick) {
         val store = MiniGameStore(context.applicationContext)
         val bonus = ExplorationConfig()
+        val dex = dexStore(context.applicationContext)
         while (true) {
             val gift = store.update { p -> Exploration.claimStartingGift(p, bonus) }
             val got = store.update { p -> Exploration.claimLoginBonus(p, DayClock.dayIndex(DemoClock.now()), bonus) }
@@ -80,6 +90,11 @@ fun AppRoot(resumeTick: Int) {
                 if (got) add("ログインボーナス: 探索ポイント +${bonus.loginBonus} / ごはん +${bonus.loginRice}")
             }
             if (messages.isNotEmpty()) loginNotice = messages.joinToString("\n")
+            // 図鑑: いまの育成の状態で発見したキャラクターを記録する(ウィジェットや放置中の進化も、次に開いたときに反映される)
+            PetStore(context.applicationContext).load()?.let { pet ->
+                val found = Dex.discoveredBy(pet)
+                if (!dex.load().discovered.containsAll(found)) dex.update { it.discover(found) }
+            }
             delay(30_000)
         }
     }
@@ -99,7 +114,13 @@ fun AppRoot(resumeTick: Int) {
             }
         }
         if (dest == Destination.Home) {
-            HomeHeader(onOpenMap = { go(Destination.WorldMap) }, onOpenDev = { go(Destination.Dev) })
+            HomeHeader(
+                onOpenMap = { go(Destination.WorldMap) },
+                onOpenFriends = { go(Destination.Friends) },
+                onOpenDex = { go(Destination.Dex) },
+                onOpenSettings = { go(Destination.Settings) },
+                onOpenDev = { go(Destination.Dev) },
+            )
         } else {
             ScreenTopBar(dest.title(), onBack = { dest.parent?.let { go(it) } })
         }
@@ -114,6 +135,9 @@ fun AppRoot(resumeTick: Int) {
                     MiniGame.WALL_BREAK -> WallBreakScreen()
                 }
                 is Destination.Site -> ExplorationSiteScreen(d.site, onLeave = { go(Destination.WorldMap) })
+                Destination.Dex -> DexScreen()
+                Destination.Friends -> FriendsScreen()
+                Destination.Settings -> SettingsScreen()
                 Destination.Dev -> DevScreen()
             }
         }

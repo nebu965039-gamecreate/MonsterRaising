@@ -23,11 +23,18 @@ import androidx.compose.ui.unit.sp
 
 /**
  * メイン画面のヘッダー(基本設計書10.2節)。左にワールドマップへの導線(地図アイコン)、中央に拠点名+天気アイコン、
- * 右にハンバーガーメニュー(フレンド・設定)。個別のアイコンは置かず、メニューの中に格納する。
+ * 右にハンバーガーメニュー(フレンド・設定。図鑑への入り口もここに置く)。個別のアイコンは置かず、メニューの中に格納する。
  * 拠点名と天気は、背景・天候システム(10.3節)ができるまでの仮の表示。
  */
 @Composable
-fun HomeHeader(onOpenMap: () -> Unit, onOpenDev: () -> Unit, modifier: Modifier = Modifier) {
+fun HomeHeader(
+    onOpenMap: () -> Unit,
+    onOpenFriends: () -> Unit,
+    onOpenDex: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenDev: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     Row(modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onOpenMap) { Text("🗺️", fontSize = 26.sp) }
@@ -42,8 +49,9 @@ fun HomeHeader(onOpenMap: () -> Unit, onOpenDev: () -> Unit, modifier: Modifier 
         Box {
             IconButton(onClick = { menuOpen = true }) { Text("☰", fontSize = 26.sp) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(text = { Text("フレンド(準備中)") }, enabled = false, onClick = {})
-                DropdownMenuItem(text = { Text("設定(準備中)") }, enabled = false, onClick = {})
+                DropdownMenuItem(text = { Text("フレンド") }, onClick = { menuOpen = false; onOpenFriends() })
+                DropdownMenuItem(text = { Text("図鑑") }, onClick = { menuOpen = false; onOpenDex() })
+                DropdownMenuItem(text = { Text("設定") }, onClick = { menuOpen = false; onOpenSettings() })
                 HorizontalDivider()
                 DropdownMenuItem(text = { Text("開発用") }, onClick = { menuOpen = false; onOpenDev() })
             }
