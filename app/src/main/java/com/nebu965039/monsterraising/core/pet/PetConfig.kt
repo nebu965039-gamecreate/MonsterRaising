@@ -29,6 +29,10 @@ data class PetConfig(
     val moodDecayGaugeThreshold: Double = 60.0,
     /** 上の状態の間の機嫌の減少(4.1: -5/時間) */
     val moodDecayPerHour: Double = 5.0,
+    /** 「長寿の秘薬」1 個で延びる寿命(4.5: 1 週間) */
+    val lifespanExtensionDays: Double = 7.0,
+    /** 寿命による世代交代で次の卵へ引き継ぐ有効度の割合(4.5: 5%) */
+    val lifespanBonusRate: Double = 0.05,
     /** 進化に必要な満腹度・清潔度(4.3: 例 60) */
     val evolutionMinGauge: Double = 60.0,
     /** この値以下で sad 系の表示になる機嫌(4.6: 機嫌 30 以下) */
@@ -41,6 +45,8 @@ data class PetConfig(
     val decayCapMs: Long get() = (decayCapHours * MS_PER_HOUR).toLong()
 
     val deathSatietyZeroMs: Long get() = (deathSatietyZeroHours * MS_PER_HOUR).toLong()
+
+    val lifespanExtensionMs: Long get() = (lifespanExtensionDays * 24 * MS_PER_HOUR).toLong()
 
     companion object {
         const val MS_PER_HOUR = 3_600_000.0

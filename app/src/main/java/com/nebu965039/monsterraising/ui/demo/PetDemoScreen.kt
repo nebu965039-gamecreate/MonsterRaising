@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.nebu965039.monsterraising.core.pet.DeathCause
 import com.nebu965039.monsterraising.core.pet.PetAppearance
 import com.nebu965039.monsterraising.core.pet.PetConfig
 import com.nebu965039.monsterraising.core.pet.PetSimulator
@@ -90,7 +91,12 @@ fun PetDemoScreen(characterId: String = "fox") {
 
     var notice by remember { mutableStateOf<String?>(null) }
     fun commit(next: PetState) {
-        if (next.generation > pet.generation) notice = "放置により死亡しました。卵が残っていました(${next.generation}代目)"
+        if (next.generation > pet.generation) {
+            notice = when (next.lastDeathCause) {
+                DeathCause.OLD_AGE -> "寿命を迎えました。卵を残しました(${next.generation}代目。先代の有効度の5%を引き継ぎ)"
+                else -> "放置により死亡しました。卵が残っていました(${next.generation}代目)"
+            }
+        }
         pet = next
     }
 
@@ -140,6 +146,12 @@ fun PetDemoScreen(characterId: String = "fox") {
         val isEgg = pet.stage == Stage.EGG
         if (isEgg) {
             Text("卵の間はステータスがありません(幼年期になると初期値が付きます)", style = MaterialTheme.typography.bodyMedium)
+            if (pet.stats.intellect > 0 || pet.stats.strength > 0) {
+                Text(
+                    "先代からの引き継ぎ  知力 +${"%.1f".format(pet.stats.intellect)} / 筋力 +${"%.1f".format(pet.stats.strength)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         } else {
             Gauge("満腹度", pet.stats.satiety)
             Gauge("清潔度", pet.stats.cleanliness)
@@ -148,6 +160,13 @@ fun PetDemoScreen(characterId: String = "fox") {
                 "有効度  知力 ${pet.stats.intellect.toInt()} / 筋力 ${pet.stats.strength.toInt()}",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            pet.lifespanEndMs()?.let { end ->
+                val left = (end - now()).coerceAtLeast(0L)
+                Text(
+                    "寿命まで あと ${left / DAY_MS}日${left % DAY_MS / HOUR_MS}時間(延長 +${pet.lifespanExtensionMs / DAY_MS}日)",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !isEgg, onClick = {
@@ -161,6 +180,21 @@ fun PetDemoScreen(characterId: String = "fox") {
                 commit(PetSimulator.pet(pet, now(), config))
                 play("happy")
             }) { Text("なでる(+${config.petMoodGain.toInt()})") }
+        }
+        Text("デモ用の操作", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = !isEgg, onClick = {
+                commit(PetSimulator.act(pet, now(), config) { it.copy(satiety = 100.0, cleanliness = 100.0) })
+            }) { Text("満腹度・清潔度を満タン") }
+            OutlinedButton(enabled = !isEgg, onClick = {
+                commit(PetSimulator.act(pet, now(), config) { it.addIntellect(50.0) })
+            }) { Text("知力 +50") }
+            OutlinedButton(enabled = !isEgg, onClick = {
+                commit(PetSimulator.act(pet, now(), config) { it.addStrength(50.0) })
+            }) { Text("筋力 +50") }
+            OutlinedButton(enabled = pet.stage == Stage.MATURE, onClick = {
+                commit(PetSimulator.extendLifespan(pet, now(), config))
+            }) { Text("長寿の秘薬(+7日)") }
         }
         Text("時間を進める(仮想時計 +${offsetMs / HOUR_MS}時間)", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -176,7 +210,7 @@ fun PetDemoScreen(characterId: String = "fox") {
         }
         Text(
             "進化は「段階の期間を満たした時点」で満腹度・清潔度が60以上のときに起こります(卵は時間だけで孵化)。" +
-                "満たさない間は保留です(1回の更新で進むのは1段階まで)。満腹度0が24時間続き、清潔度が20以下になると死亡し、卵に戻ります。",
+                "満たさない間は保留です(1回の更新で進むのは1段階まで)。満腹度0が24時間続き、清潔度が20以下になると死亡し、卵に戻ります。成熟期は2週間で寿命を迎え、先代の有効度の5%を引き継いだ卵が残ります。放置中に進化の時刻が来ていても遡らず、開いた時点の値で判定します。",
             style = MaterialTheme.typography.bodySmall,
         )
     }

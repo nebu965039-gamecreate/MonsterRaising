@@ -177,6 +177,106 @@ class PetSimulatorTest {
         assertEquals(Stage.EGG, PetSimulator.advance(egg, 30_000L, config).stage)
     }
 
+    // --- 寿命による世代交代(4.5) ---
+
+    private val twoWeeks = 14 * day
+
+    private fun mature(intellect: Double = 200.0, strength: Double = 100.0, last: Long = twoWeeks - hour, extension: Long = 0L) =
+        PetState(PetStats(100.0, 100.0, 50.0, intellect, strength), Stage.MATURE, 0L, last, lifespanExtensionMs = extension)
+
+    @Test
+    fun lifespan_endsTwoWeeksAfterMaturity() {
+        assertEquals(twoWeeks, mature().lifespanEndMs())
+        assertNull(state(stage = Stage.INFANT).lifespanEndMs())
+    }
+
+    @Test
+    fun oldAge_notBeforeTheEnd() {
+        val s = PetSimulator.advance(mature(), twoWeeks - 1, config)
+        assertEquals(Stage.MATURE, s.stage)
+        assertEquals(1, s.generation)
+    }
+
+    @Test
+    fun oldAge_passesFivePercentOfEffectivenessToTheNextEgg() {
+        val egg = PetSimulator.advance(mature(intellect = 200.0, strength = 100.0), twoWeeks, config)
+        assertEquals(Stage.EGG, egg.stage)
+        assertEquals(2, egg.generation)
+        assertEquals(DeathCause.OLD_AGE, egg.lastDeathCause)
+        assertEquals(10.0, egg.stats.intellect, 1e-9)
+        assertEquals(5.0, egg.stats.strength, 1e-9)
+    }
+
+    @Test
+    fun bonusEgg_handsTheBonusToTheInfantOnHatching() {
+        val egg = PetSimulator.advance(mature(intellect = 200.0, strength = 100.0), twoWeeks, config)
+        val infant = PetSimulator.advance(egg, twoWeeks + 60_000L, config)
+        assertEquals(Stage.INFANT, infant.stage)
+        assertEquals(PetStats(100.0, 100.0, 50.0, intellect = 10.0, strength = 5.0), infant.stats)
+        assertNull(infant.lastDeathCause)
+    }
+
+    @Test
+    fun elixir_extendsLifespanByOneWeek() {
+        val extended = PetSimulator.extendLifespan(mature(), twoWeeks - hour, config)
+        assertEquals(twoWeeks + 7 * day, extended.lifespanEndMs())
+        assertEquals(Stage.MATURE, PetSimulator.advance(extended, twoWeeks + day, config).stage)
+        assertEquals(Stage.EGG, PetSimulator.advance(extended.copy(lastUpdatedMs = twoWeeks + 7 * day - hour), twoWeeks + 7 * day, config).stage)
+    }
+
+    @Test
+    fun elixir_stacks() {
+        val once = PetSimulator.extendLifespan(mature(), twoWeeks - hour, config)
+        val twice = PetSimulator.extendLifespan(once, twoWeeks - hour, config)
+        assertEquals(twoWeeks + 14 * day, twice.lifespanEndMs())
+    }
+
+    @Test
+    fun elixir_hasNoEffectOutsideMaturity() {
+        val s = state(stage = Stage.GROWTH_2)
+        assertEquals(0L, PetSimulator.extendLifespan(s, 0, config).lifespanExtensionMs)
+    }
+
+    @Test
+    fun elixir_tooLateAfterTheLifespanEnded() {
+        val s = PetSimulator.extendLifespan(mature(), twoWeeks, config)
+        assertEquals(Stage.EGG, s.stage)
+        assertEquals(0L, s.lifespanExtensionMs)
+    }
+
+    @Test
+    fun neglectDeath_givesNoBonus() {
+        val s = PetState(PetStats(0.0, 0.0, 0.0, intellect = 500.0, strength = 500.0), Stage.MATURE, 0L, 25 * hour, satietyZeroSinceMs = 0L)
+        val egg = PetSimulator.advance(s, 25 * hour, config)
+        assertEquals(Stage.EGG, egg.stage)
+        assertEquals(DeathCause.NEGLECT, egg.lastDeathCause)
+        assertEquals(0.0, egg.stats.intellect, 1e-9)
+        assertEquals(0.0, egg.stats.strength, 1e-9)
+    }
+
+    @Test
+    fun whenBothApply_theEarlierOneWins() {
+        // 寿命(14日)が先: 放置死亡の成立時刻は 14日 + 14時間
+        val oldFirst = PetState(
+            PetStats(0.0, 0.0, 0.0, intellect = 200.0, strength = 0.0), Stage.MATURE, 0L, twoWeeks + 5 * hour,
+            satietyZeroSinceMs = twoWeeks - 10 * hour,
+        )
+        val a = PetSimulator.advance(oldFirst, twoWeeks + 15 * hour, config)
+        assertEquals(DeathCause.OLD_AGE, a.lastDeathCause)
+        assertEquals(10.0, a.stats.intellect, 1e-9)
+        // 放置死亡が先: 成立時刻は 14日 - 6時間
+        val neglectFirst = oldFirst.copy(satietyZeroSinceMs = twoWeeks - 30 * hour)
+        val b = PetSimulator.advance(neglectFirst, twoWeeks + 15 * hour, config)
+        assertEquals(DeathCause.NEGLECT, b.lastDeathCause)
+        assertEquals(0.0, b.stats.intellect, 1e-9)
+    }
+
+    @Test
+    fun careCannotSaveAPetWhoseLifespanEnded() {
+        val s = PetSimulator.feed(mature(), twoWeeks, 100.0, config)
+        assertEquals(Stage.EGG, s.stage)
+    }
+
     // --- お世話 ---
 
     @Test
@@ -304,7 +404,10 @@ class PetSimulatorTest {
 
     @Test
     fun codec_roundTrips() {
-        val s = PetState(PetStats(70.5, 33.3, 12.0, intellect = 7.0, strength = 2.0), Stage.GROWTH_2, 123L, 456L)
+        val s = PetState(
+            PetStats(70.5, 33.3, 12.0, intellect = 7.0, strength = 2.0), Stage.GROWTH_2, 123L, 456L,
+            satietyZeroSinceMs = 99L, generation = 3, lifespanExtensionMs = 7L, lastDeathCause = DeathCause.OLD_AGE,
+        )
         assertEquals(s, PetStateCodec.decode(PetStateCodec.encode(s)))
     }
 
