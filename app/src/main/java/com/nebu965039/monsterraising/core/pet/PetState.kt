@@ -15,7 +15,7 @@ data class PetState(
     val lastUpdatedMs: Long,
 ) {
     companion object {
-        /** 新しい卵から始める */
+        /** 新しい卵から始める。卵はステータスを持たないため [stats] は未使用(幼年期に入るときに初期値へ置き換わる) */
         fun newEgg(nowMs: Long, config: PetConfig = PetConfig()) = PetState(
             stats = config.initialStats,
             stage = Stage.EGG,
@@ -40,13 +40,18 @@ object PetSimulator {
     fun pet(state: PetState, nowMs: Long, config: PetConfig = PetConfig()) =
         act(state, nowMs, config) { it.addMood(config.petMoodGain) }
 
-    /** 経過時間ぶんの減少を反映してから [change] を適用し、進化を再判定する(保留中の進化が成立しうるため)。 */
+    /**
+     * 経過時間ぶんの減少を反映してから [change] を適用し、進化を再判定する(保留中の進化が成立しうるため)。
+     * 卵はステータスを持たないため、お世話は反映されない。
+     */
     fun act(state: PetState, nowMs: Long, config: PetConfig, change: (PetStats) -> PetStats): PetState {
+        if (state.stage == Stage.EGG) return advance(state, nowMs, config)
         val decayed = decay(state, nowMs, config)
         return evolve(decayed.copy(stats = change(decayed.stats)), nowMs, config)
     }
 
     private fun decay(state: PetState, nowMs: Long, config: PetConfig): PetState {
+        if (state.stage == Stage.EGG) return state.copy(lastUpdatedMs = nowMs)
         val elapsed = (nowMs - state.lastUpdatedMs).coerceAtLeast(0L).coerceAtMost(config.decayCapMs)
         val hours = elapsed / PetConfig.MS_PER_HOUR
         val stats = state.stats.copy(
@@ -59,7 +64,12 @@ object PetSimulator {
     /** 1 回の呼び出しで進む段階は 1 つまで。新しい段階の開始時刻は判定時点([nowMs])とする。 */
     private fun evolve(state: PetState, nowMs: Long, config: PetConfig): PetState =
         when (val r = Evolution.check(state.stage, state.stageEnteredAtMs, nowMs, state.stats, config)) {
-            is EvolutionCheck.Ready -> state.copy(stage = r.next, stageEnteredAtMs = nowMs)
+            is EvolutionCheck.Ready -> state.copy(
+                stage = r.next,
+                stageEnteredAtMs = nowMs,
+                // 孵化(卵 → 幼年期)の時点で初期ステータスを付与する
+                stats = if (state.stage == Stage.EGG) config.initialStats else state.stats,
+            )
             else -> state
         }
 }

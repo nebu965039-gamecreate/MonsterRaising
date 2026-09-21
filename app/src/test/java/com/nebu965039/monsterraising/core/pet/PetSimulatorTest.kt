@@ -2,7 +2,6 @@ package com.nebu965039.monsterraising.core.pet
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PetSimulatorTest {
@@ -153,17 +152,18 @@ class PetSimulatorTest {
     @Test
     fun appearance_followsStats() {
         assertEquals("idle", PetAppearance.baseAnimation(PetStats(100.0, 100.0, 80.0), config))
-        assertEquals("sad", PetAppearance.baseAnimation(PetStats(100.0, 100.0, 29.9), config))
-        assertEquals("idle", PetAppearance.baseAnimation(PetStats(100.0, 100.0, 30.0), config))
+        assertEquals("sad", PetAppearance.baseAnimation(PetStats(100.0, 100.0, 30.0), config)) // 機嫌30以下
+        assertEquals("idle", PetAppearance.baseAnimation(PetStats(100.0, 100.0, 30.1), config))
+        assertEquals("sad", PetAppearance.baseAnimation(PetStats(30.0, 100.0, 80.0), config)) // 満腹度30以下
+        assertEquals("idle", PetAppearance.baseAnimation(PetStats(30.1, 100.0, 80.0), config))
         assertEquals("dirty", PetAppearance.baseAnimation(PetStats(100.0, 0.0, 80.0), config))
         assertEquals("dirty", PetAppearance.baseAnimation(PetStats(100.0, 0.0, 10.0), config)) // 暫定: 清潔度0を優先
     }
 
     @Test
-    fun appearance_satietyThresholdIsOptional() {
-        val c = PetConfig(sadSatietyThreshold = 20.0)
-        assertEquals("sad", PetAppearance.baseAnimation(PetStats(19.0, 100.0, 80.0), c))
-        assertEquals("idle", PetAppearance.baseAnimation(PetStats(19.0, 100.0, 80.0), config))
+    fun appearance_satietyCanBeIgnored() {
+        val c = PetConfig(sadSatietyThreshold = null)
+        assertEquals("idle", PetAppearance.baseAnimation(PetStats(5.0, 100.0, 80.0), c))
     }
 
     // --- 保存形式 ---
@@ -182,10 +182,39 @@ class PetSimulatorTest {
     }
 
     @Test
-    fun newEgg_startsFromConfig() {
+    fun newEgg_startsAsEgg() {
         val s = PetState.newEgg(1000L, config)
         assertEquals(Stage.EGG, s.stage)
         assertEquals(1000L, s.stageEnteredAtMs)
-        assertTrue(s.stats.satiety > 0)
+    }
+
+    // --- 卵(ステータスなし。幼年期から初期値を付与) ---
+
+    @Test
+    fun egg_doesNotDecayOrTakeCare() {
+        val egg = PetState.newEgg(0L, config)
+        val later = PetSimulator.advance(egg, 30_000L, config) // 孵化前(30秒)
+        assertEquals(egg.stats, later.stats)
+        assertEquals(Stage.EGG, later.stage)
+        val fed = PetSimulator.feed(egg, 30_000L, 50.0, config)
+        assertEquals(egg.stats, fed.stats)
+        assertEquals(Stage.EGG, fed.stage)
+    }
+
+    @Test
+    fun egg_hatchesByTimeAloneAndGetsInitialStats() {
+        val egg = PetState.newEgg(0L, config).copy(stats = PetStats(0.0, 0.0, 0.0)) // 値が低くても孵化する
+        val s = PetSimulator.advance(egg, 60_000L, config)
+        assertEquals(Stage.INFANT, s.stage)
+        assertEquals(60_000L, s.stageEnteredAtMs)
+        assertEquals(PetStats(100.0, 100.0, 50.0), s.stats)
+        assertEquals(60_000L, s.lastUpdatedMs)
+    }
+
+    @Test
+    fun infant_decaysFromHatchTime() {
+        val hatched = PetSimulator.advance(PetState.newEgg(0L, config), 60_000L, config)
+        val s = PetSimulator.advance(hatched, 60_000L + 10 * hour, config)
+        assertEquals(90.0, s.stats.satiety, 1e-9)
     }
 }

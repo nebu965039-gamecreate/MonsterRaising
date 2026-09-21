@@ -27,7 +27,9 @@ object Evolution {
         val next = stage.next() ?: return EvolutionCheck.Final
         val remaining = stageEnteredAtMs + stage.durationMs - nowMs
         if (remaining > 0) return EvolutionCheck.Waiting(remaining)
-        val ok = stats.satiety >= config.evolutionMinGauge && stats.cleanliness >= config.evolutionMinGauge
+        // 卵はステータスを持たず、時間だけで孵化する(幼年期から初期値を付与)
+        val ok = stage == Stage.EGG ||
+            (stats.satiety >= config.evolutionMinGauge && stats.cleanliness >= config.evolutionMinGauge)
         return if (ok) EvolutionCheck.Ready(next) else EvolutionCheck.Pending
     }
 

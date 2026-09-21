@@ -51,9 +51,8 @@ import kotlinx.coroutines.withContext
 
 private val config = PetConfig()
 
-// 餌の回復量は 4.1 の +20〜30 の中間。掃除は 4.1 の +25(10.2.2 の「汚れ1箇所 +20」と食い違うため要確認)
+// 餌の回復量は 4.1 の +20〜30 の中間。掃除は汚れ 1 箇所ぶん(10.2.2)。実際の汚れ操作は後のフェーズで実装する
 private const val FEED_AMOUNT = 25.0
-private const val CLEAN_AMOUNT = 25.0
 
 private const val HOUR_MS = 3_600_000L
 private const val DAY_MS = 24 * HOUR_MS
@@ -128,22 +127,27 @@ fun PetDemoScreen(characterId: String = "fox") {
             }
         }
         Text("段階: ${pet.stage.label()}   (表示: ${oneShot ?: base})", style = MaterialTheme.typography.titleMedium)
-        Gauge("満腹度", pet.stats.satiety)
-        Gauge("清潔度", pet.stats.cleanliness)
-        Gauge("機嫌", pet.stats.mood)
-        Text(
-            "有効度  知力 ${pet.stats.intellect.toInt()} / 筋力 ${pet.stats.strength.toInt()}",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        val isEgg = pet.stage == Stage.EGG
+        if (isEgg) {
+            Text("卵の間はステータスがありません(幼年期になると初期値が付きます)", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Gauge("満腹度", pet.stats.satiety)
+            Gauge("清潔度", pet.stats.cleanliness)
+            Gauge("機嫌", pet.stats.mood)
+            Text(
+                "有効度  知力 ${pet.stats.intellect.toInt()} / 筋力 ${pet.stats.strength.toInt()}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
+            Button(enabled = !isEgg, onClick = {
                 pet = PetSimulator.feed(pet, now(), FEED_AMOUNT, config)
                 play("eat")
             }) { Text("餌(+${FEED_AMOUNT.toInt()})") }
-            Button(onClick = { pet = PetSimulator.clean(pet, now(), CLEAN_AMOUNT, config) }) {
-                Text("掃除(+${CLEAN_AMOUNT.toInt()})")
+            Button(enabled = !isEgg, onClick = { pet = PetSimulator.clean(pet, now(), config.cleanGainPerStain, config) }) {
+                Text("掃除(+${config.cleanGainPerStain.toInt()})")
             }
-            Button(onClick = {
+            Button(enabled = !isEgg, onClick = {
                 pet = PetSimulator.pet(pet, now(), config)
                 play("happy")
             }) { Text("なでる(+${config.petMoodGain.toInt()})") }
@@ -160,7 +164,7 @@ fun PetDemoScreen(characterId: String = "fox") {
             }) { Text("卵からやり直す") }
         }
         Text(
-            "進化は「段階の期間を満たした時点」で満腹度・清潔度が60以上のときに起こります。" +
+            "進化は「段階の期間を満たした時点」で満腹度・清潔度が60以上のときに起こります(卵は時間だけで孵化)。" +
                 "満たさない間は保留です(1回の更新で進むのは1段階まで)。",
             style = MaterialTheme.typography.bodySmall,
         )
