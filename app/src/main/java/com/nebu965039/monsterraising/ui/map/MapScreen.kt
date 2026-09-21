@@ -1,5 +1,9 @@
 package com.nebu965039.monsterraising.ui.map
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -7,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,9 +43,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
+import androidx.core.content.ContextCompat
 import com.nebu965039.monsterraising.core.exploration.Exploration
 import com.nebu965039.monsterraising.core.exploration.ExplorationConfig
 import com.nebu965039.monsterraising.core.exploration.ExplorationPlan
@@ -53,11 +57,17 @@ import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.notification.ExplorationNotificationWorker
 import com.nebu965039.monsterraising.ui.demo.DemoClock
+import com.nebu965039.monsterraising.ui.demo.DemoFriends
 import com.nebu965039.monsterraising.ui.minigame.itemName
 import com.nebu965039.monsterraising.ui.sprite.LoadedSprite
 import com.nebu965039.monsterraising.ui.sprite.SpriteAssets
 import com.nebu965039.monsterraising.ui.sprite.SpritePlayer
+import com.nebu965039.monsterraising.widget.PetWidgetUpdater
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private val config = ExplorationConfig()
 
@@ -78,6 +88,7 @@ private fun ExplorationSite.background(): Brush = when (this) {
  * ワールドマップ(基本設計書10.4節)と探索拠点(8節)の画面。
  * マップで拠点を選ぶと拠点の画面に移り、「探索する / この場を離れる」→「少し探索(1回)/ じっくり探索(10回)」と選ぶと、
  * キャラクターが背景のほうへ小さくなっていき、探索が始まる。探索中は「探索中(残り〜)」と表示する。
+ * 同時に探索できるのは 1 か所で、フレンドがいれば 3 か所まで。2 か所目以降は「フレンドが協力しに来てくれました」と表示する(8.6節)。
  */
 @Composable
 fun MapScreen() {
@@ -89,6 +100,16 @@ fun MapScreen() {
     var site by remember { mutableStateOf<ExplorationSite?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     fun day() = DayClock.dayIndex(DemoClock.now())
+
+    // Android 13 以降は、通知の許可を求める(探索の完了を通知するため)
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // 残り時間の表示を更新する
     LaunchedEffect(Unit) {
@@ -115,21 +136,28 @@ fun MapScreen() {
             nowMs = nowMs,
             isEgg = isEgg,
             onStart = { plan ->
+                requestNotificationPermission()
                 val started = store.update { p ->
-                    when (val r = Exploration.start(p, current, plan, DemoClock.now())) {
-                        is StartResult.Started -> r.progress to true
-                        else -> p to false
+                    when (val r = Exploration.start(p, current, plan, DemoClock.now(), hasFriends = DemoFriends.hasFriends)) {
+                        is StartResult.Started -> r.progress to r.progress.exploration.actives.first { it.site == current }
+                        else -> p to null
                     }
                 }
                 progress = store.load()
-                started
+                if (started != null) {
+                    // 終わる時刻に、完了の通知を出す(予約は端末の再起動後も残る)
+                    ExplorationNotificationWorker.schedule(context, current, started.startedAtMs, started.endsAtMs - started.startedAtMs)
+                    PetWidgetUpdater.updateAll(context)
+                }
+                started != null
             },
             onCollect = {
                 val result = store.update { p ->
-                    val c = Exploration.collect(p, DemoClock.now())
+                    val c = Exploration.collect(p, current, DemoClock.now())
                     (c?.progress ?: p) to c?.rewards
                 }
                 progress = store.load()
+                PetWidgetUpdater.updateAll(context)
                 result
             },
             onLeave = { site = null },
@@ -139,7 +167,7 @@ fun MapScreen() {
 
 @Composable
 private fun WorldMap(progress: MiniGameProgress, nowMs: Long, notice: String?, onSelect: (ExplorationSite) -> Unit) {
-    val status = Exploration.status(progress, nowMs)
+    val capacity = config.capacity(DemoFriends.hasFriends)
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -147,12 +175,18 @@ private fun WorldMap(progress: MiniGameProgress, nowMs: Long, notice: String?, o
         Text("ワールドマップ", style = MaterialTheme.typography.titleLarge)
         Text("探索ポイント ${progress.inventory.explorationPoints}", style = MaterialTheme.typography.titleMedium)
         notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium) }
+        Text(
+            "同時に探索できる拠点: ${progress.exploration.actives.size} / $capacity" +
+                if (DemoFriends.hasFriends) "(フレンドの協力で最大 3 か所)" else "(フレンドがいると最大 3 か所)",
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Text("探索に行く拠点を選んでください。", style = MaterialTheme.typography.bodyMedium)
         ExplorationSite.entries.forEach { s ->
-            val label = when {
-                status is ExplorationStatus.InProgress && status.site == s -> "探索中(残り ${Exploration.remainingText(status.remainingMs)})"
-                status is ExplorationStatus.Finished && status.site == s -> "探索が終わりました(受け取れます)"
-                else -> ""
+            val status = Exploration.status(progress, s, nowMs)
+            val label = when (status) {
+                is ExplorationStatus.InProgress -> "探索中(残り ${Exploration.remainingText(status.remainingMs)})"
+                is ExplorationStatus.Finished -> "探索が終わりました(受け取れます)"
+                ExplorationStatus.Idle -> ""
             }
             Button(onClick = { onSelect(s) }, modifier = Modifier.fillMaxWidth()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -162,6 +196,10 @@ private fun WorldMap(progress: MiniGameProgress, nowMs: Long, notice: String?, o
             }
         }
         Text("自宅・ゲーム拠点などは、今後ここに追加されます。", style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = DemoFriends.hasFriends, onCheckedChange = { DemoFriends.hasFriends = it })
+            Text("フレンドがいる(動作確認用)", style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
@@ -193,14 +231,17 @@ private fun SiteView(
         }
     }
 
-    val status = Exploration.status(progress, nowMs)
+    val status = Exploration.status(progress, site, nowMs)
     val points = progress.inventory.explorationPoints
+    val capacity = config.capacity(DemoFriends.hasFriends)
+    val used = progress.exploration.actives.size
+    val hasFreeSlot = used < capacity
 
     Box(Modifier.fillMaxSize().background(site.background())) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(site.displayName, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
 
-            // キャラクター(探索に出ていないとき、または出発の演出中だけ表示する)
+            // キャラクター(この拠点を探索に出ていないとき、または出発の演出中だけ表示する)
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.BottomCenter) {
                 val loaded = sprite
                 val away = status is ExplorationStatus.InProgress && !departing
@@ -236,22 +277,14 @@ private fun SiteView(
                     departing -> Text("行ってきます!", color = text, style = MaterialTheme.typography.titleMedium)
 
                     status is ExplorationStatus.InProgress -> {
-                        if (status.site == site) {
-                            Text("探索中(残り ${Exploration.remainingText(status.remainingMs)})", color = text, style = MaterialTheme.typography.titleMedium)
-                            Text("キャラクターは探索に出かけています。終わるまでお待ちください。", color = text, style = MaterialTheme.typography.bodyMedium)
-                        } else {
-                            Text("${status.site.displayName}を探索中です(残り ${Exploration.remainingText(status.remainingMs)})", color = text, style = MaterialTheme.typography.titleMedium)
-                        }
+                        Text("探索中(残り ${Exploration.remainingText(status.remainingMs)})", color = text, style = MaterialTheme.typography.titleMedium)
+                        Text("キャラクターは探索に出かけています。終わるまでお待ちください。", color = text, style = MaterialTheme.typography.bodyMedium)
                         OutlinedButton(onClick = onLeave) { Text("ワールドマップへ") }
                     }
 
                     status is ExplorationStatus.Finished -> {
-                        if (status.site == site) {
-                            Text("探索が終わりました!", color = text, style = MaterialTheme.typography.titleMedium)
-                            Button(onClick = { collected = onCollect() }) { Text("成果を受け取る") }
-                        } else {
-                            Text("${status.site.displayName}の探索が終わっています。そこで成果を受け取ってください。", color = text, style = MaterialTheme.typography.bodyMedium)
-                        }
+                        Text("探索が終わりました!", color = text, style = MaterialTheme.typography.titleMedium)
+                        Button(onClick = { collected = onCollect() }) { Text("成果を受け取る") }
                         OutlinedButton(onClick = onLeave) { Text("ワールドマップへ") }
                     }
 
@@ -267,11 +300,26 @@ private fun SiteView(
                         }
                         Text(site.intro, color = text, style = MaterialTheme.typography.bodyMedium)
                         Text("探索をしますか?", color = text, style = MaterialTheme.typography.titleMedium)
-                        Button(onClick = { step = SiteStep.PLAN; collected = null }) { Text("探索する") }
+                        Button(enabled = hasFreeSlot, onClick = { step = SiteStep.PLAN; collected = null }) { Text("探索する") }
+                        if (!hasFreeSlot) {
+                            Text(
+                                if (DemoFriends.hasFriends) {
+                                    "同時に探索できる 3 か所を使い切っています。"
+                                } else {
+                                    "ほかの拠点を探索中のため、いまは探索できません。フレンドがいると、最大 3 か所まで同時に探索できます。"
+                                },
+                                color = text,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                         OutlinedButton(onClick = onLeave) { Text("この場を離れる") }
                     }
 
                     else -> {
+                        // 2 か所目以降は、フレンドの協力による
+                        if (Exploration.isFriendHelp(progress)) {
+                            Text("フレンドが協力しに来てくれました!", color = Color(0xFFFFE082), style = MaterialTheme.typography.titleMedium)
+                        }
                         Text("どのくらい探索しますか?(所持ポイント $points)", color = text, style = MaterialTheme.typography.titleMedium)
                         ExplorationPlan.entries.forEach { plan ->
                             val cost = config.cost(plan)

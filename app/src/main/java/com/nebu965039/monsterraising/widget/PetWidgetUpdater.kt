@@ -13,10 +13,12 @@ import android.widget.RemoteViews
 import androidx.core.graphics.scale
 import com.nebu965039.monsterraising.MainActivity
 import com.nebu965039.monsterraising.R
+import com.nebu965039.monsterraising.core.exploration.Exploration
 import com.nebu965039.monsterraising.core.pet.PetConfig
 import com.nebu965039.monsterraising.core.pet.PetSimulator
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.core.widget.PetWidgetModel
+import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
 import com.nebu965039.monsterraising.ui.common.label
 
@@ -52,12 +54,20 @@ object PetWidgetUpdater {
 
     fun update(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
         val state = PetStore(context).update(System.currentTimeMillis(), config) { it }
-        val model = PetWidgetModel.of(state, config)
+        // 探索中・探索完了は、ウィジェットにも表示する(キャラクターは消えない。8.6節)
+        val exploration = Exploration.summaryLine(Exploration.overview(MiniGameStore(context).load(), System.currentTimeMillis()))
+        val model = PetWidgetModel.of(state, config, exploration)
         val views = RemoteViews(context.packageName, R.layout.widget_pet)
 
         val scale = imageScale(context, manager.getAppWidgetOptions(appWidgetId))
         views.setImageViewBitmap(R.id.widget_image, frameBitmap(context, model.frameKey, scale))
         views.setTextViewText(R.id.widget_title, "${model.generation}代目 ${model.stage.label()}")
+        if (model.explorationNote != null) {
+            views.setTextViewText(R.id.widget_exploration, model.explorationNote)
+            views.setViewVisibility(R.id.widget_exploration, View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.widget_exploration, View.GONE)
+        }
         if (model.isEgg) {
             views.setTextViewText(R.id.widget_status, context.getString(R.string.widget_egg_note))
             views.setViewVisibility(R.id.widget_buttons, View.GONE)

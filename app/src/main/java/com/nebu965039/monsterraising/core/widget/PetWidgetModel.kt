@@ -21,11 +21,13 @@ data class PetWidgetModel(
     val satietyDots: Int?,
     val cleanlinessDots: Int?,
     val moodDots: Int?,
+    /** 探索の一行表示(「探索中(残り〜)」「探索完了!」)。探索していなければ null(8.6節) */
+    val explorationNote: String? = null,
 ) {
     companion object {
         const val DOT_MAX = 10
 
-        fun of(state: PetState, config: PetConfig = PetConfig()): PetWidgetModel {
+        fun of(state: PetState, config: PetConfig = PetConfig(), explorationNote: String? = null): PetWidgetModel {
             val isEgg = state.stage == Stage.EGG
             return PetWidgetModel(
                 frameKey = if (isEgg) FRAME_NORMAL else frameFor(PetAppearance.baseAnimation(state.stats, config)),
@@ -35,6 +37,7 @@ data class PetWidgetModel(
                 satietyDots = if (isEgg) null else dots(state.stats.satiety),
                 cleanlinessDots = if (isEgg) null else dots(state.stats.cleanliness),
                 moodDots = if (isEgg) null else dots(state.stats.mood),
+                explorationNote = explorationNote,
             )
         }
 

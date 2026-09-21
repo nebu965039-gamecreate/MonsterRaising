@@ -37,6 +37,10 @@ data class ExplorationConfig(
     val longDurationMs: Long = 4 * 3_600_000L,
     /** 探索 1 回で入手するアイテムの数(8.3節: 3 個。それぞれ独立に抽選) */
     val itemsPerRun: Int = 3,
+    /** 同時に探索できる拠点の数: ふだんは 1 か所(8.6節) */
+    val baseSlots: Int = 1,
+    /** フレンドがいるときに追加で探索できる拠点の数(8.6節: 2 か所追加で合計 3 か所) */
+    val friendExtraSlots: Int = 2,
     /** ログイン時に付与するポイント(8.2節: 1 日 1 回 100 ポイント) */
     val loginBonus: Int = 100,
     /** 排出確率(8.3節)。ノーマル(ごはん)、レア(ミニゲーム券)、かなりレア(装備)、超レア(長寿の秘薬)の順に累積して抽選する */
@@ -46,6 +50,9 @@ data class ExplorationConfig(
     // 残り(0.5%)が超レア
 ) {
     fun cost(plan: ExplorationPlan): Int = if (plan == ExplorationPlan.LONG) longCost else costPerRun * plan.runs
+
+    /** 同時に探索できる拠点の数 */
+    fun capacity(hasFriends: Boolean): Int = baseSlots + if (hasFriends) friendExtraSlots else 0
 
     fun duration(plan: ExplorationPlan): Long = if (plan == ExplorationPlan.LONG) longDurationMs else durationPerRunMs * plan.runs
 }
@@ -63,7 +70,8 @@ data class ActiveExploration(
 
 @Serializable
 data class ExplorationState(
-    val active: ActiveExploration? = null,
+    /** 探索中(または終わって受け取り待ち)の探索。拠点ごとに 1 つまで */
+    val actives: List<ActiveExploration> = emptyList(),
     /** ログインボーナスを最後に受け取った日(日付の通し番号) */
     val loginBonusDay: Long = -1L,
 )
@@ -77,11 +85,22 @@ sealed interface ExplorationStatus {
     data class Finished(val site: ExplorationSite, val plan: ExplorationPlan, val rewards: Map<ItemType, Int>) : ExplorationStatus
 }
 
+/** 全拠点の探索の状況(ウィジェットの表示・通知などに使う)。 */
+data class ExplorationOverview(
+    val inProgress: List<ExplorationStatus.InProgress>,
+    val finished: List<ExplorationStatus.Finished>,
+) {
+    val isEmpty: Boolean get() = inProgress.isEmpty() && finished.isEmpty()
+}
+
 sealed interface StartResult {
     data class Started(val progress: MiniGameProgress) : StartResult
 
-    /** すでに探索中(同時に探索できるのは 1 か所。暫定) */
-    data object AlreadyExploring : StartResult
+    /** その拠点はすでに探索中(または受け取り待ち) */
+    data object SiteBusy : StartResult
+
+    /** 同時に探索できる拠点の数の上限に達している */
+    data class NoFreeSlot(val capacity: Int) : StartResult
 
     data class NotEnoughPoints(val needed: Int, val have: Int) : StartResult
 }
@@ -115,7 +134,10 @@ object Exploration {
         return result
     }
 
-    /** 探索を始める。ポイントを消費し、終わる時刻と報酬を決める。すでに探索中、またはポイント不足なら始めない。 */
+    /**
+     * 探索を始める。ポイントを消費し、終わる時刻と報酬を決める。
+     * 同時に探索できるのは、ふだんは 1 か所、フレンドがいれば 3 か所まで(8.6節)。同じ拠点は重ねて探索できない。
+     */
     fun start(
         progress: MiniGameProgress,
         site: ExplorationSite,
@@ -123,38 +145,80 @@ object Exploration {
         nowMs: Long,
         random: Random = Random.Default,
         config: ExplorationConfig = ExplorationConfig(),
+        hasFriends: Boolean = false,
     ): StartResult {
-        if (progress.exploration.active != null) return StartResult.AlreadyExploring
+        val actives = progress.exploration.actives
+        if (actives.any { it.site == site }) return StartResult.SiteBusy
+        val capacity = config.capacity(hasFriends)
+        if (actives.size >= capacity) return StartResult.NoFreeSlot(capacity)
         val cost = config.cost(plan)
         val inventory = progress.inventory.spendPoints(cost)
             ?: return StartResult.NotEnoughPoints(cost, progress.inventory.explorationPoints)
         val rewards = rollRewards(site, plan, random, config).mapKeys { it.key.name }
         val active = ActiveExploration(site, plan, nowMs, nowMs + config.duration(plan), rewards)
         return StartResult.Started(
-            progress.copy(inventory = inventory, exploration = progress.exploration.copy(active = active)),
+            progress.copy(inventory = inventory, exploration = progress.exploration.copy(actives = actives + active)),
         )
     }
 
-    fun status(progress: MiniGameProgress, nowMs: Long): ExplorationStatus {
-        val a = progress.exploration.active ?: return ExplorationStatus.Idle
-        return if (nowMs >= a.endsAtMs) {
+    /**
+     * その拠点で、すでに別の拠点を探索しているか(いれば「フレンドが協力しに来てくれました」と表示する。8.6節)。
+     * 最初の 1 か所はひとりで、2 か所目以降はフレンドの協力による。
+     */
+    fun isFriendHelp(progress: MiniGameProgress): Boolean = progress.exploration.actives.isNotEmpty()
+
+    fun status(progress: MiniGameProgress, site: ExplorationSite, nowMs: Long): ExplorationStatus {
+        val a = progress.exploration.actives.firstOrNull { it.site == site } ?: return ExplorationStatus.Idle
+        return statusOf(a, nowMs)
+    }
+
+    fun overview(progress: MiniGameProgress, nowMs: Long): ExplorationOverview {
+        val statuses = progress.exploration.actives.map { statusOf(it, nowMs) }
+        return ExplorationOverview(
+            inProgress = statuses.filterIsInstance<ExplorationStatus.InProgress>().sortedBy { it.remainingMs },
+            finished = statuses.filterIsInstance<ExplorationStatus.Finished>(),
+        )
+    }
+
+    /** 終わった探索の報酬を持ち物へ受け取る。まだ終わっていない・探索していない場合は null。 */
+    fun collect(progress: MiniGameProgress, site: ExplorationSite, nowMs: Long): CollectResult? {
+        val finished = status(progress, site, nowMs) as? ExplorationStatus.Finished ?: return null
+        var inventory = progress.inventory
+        for ((item, n) in finished.rewards) inventory = inventory.add(item, n)
+        return CollectResult(
+            progress.copy(
+                inventory = inventory,
+                exploration = progress.exploration.copy(actives = progress.exploration.actives.filterNot { it.site == site }),
+            ),
+            site,
+            finished.rewards,
+        )
+    }
+
+    /**
+     * ウィジェットに出す探索の一行表示(8.6節)。探索が終わっていれば「探索完了!」、探索中なら「探索中(残り〜)」。
+     * 複数の拠点を探索しているときは、最も早く終わるものの残り時間を出す。何もなければ null。
+     */
+    fun summaryLine(overview: ExplorationOverview): String? = when {
+        overview.finished.isNotEmpty() ->
+            if (overview.finished.size == 1) "探索完了!" else "探索完了!(${overview.finished.size}か所)"
+        overview.inProgress.isNotEmpty() -> {
+            val first = overview.inProgress.first()
+            if (overview.inProgress.size == 1) {
+                "探索中(残り ${remainingText(first.remainingMs)})"
+            } else {
+                "探索中 ${overview.inProgress.size}か所(最短 残り ${remainingText(first.remainingMs)})"
+            }
+        }
+        else -> null
+    }
+
+    private fun statusOf(a: ActiveExploration, nowMs: Long): ExplorationStatus =
+        if (nowMs >= a.endsAtMs) {
             ExplorationStatus.Finished(a.site, a.plan, a.rewards.mapKeys { ItemType.valueOf(it.key) })
         } else {
             ExplorationStatus.InProgress(a.site, a.plan, a.endsAtMs - nowMs)
         }
-    }
-
-    /** 終わった探索の報酬を持ち物へ受け取る。まだ終わっていない・探索していない場合は null。 */
-    fun collect(progress: MiniGameProgress, nowMs: Long): CollectResult? {
-        val finished = status(progress, nowMs) as? ExplorationStatus.Finished ?: return null
-        var inventory = progress.inventory
-        for ((item, n) in finished.rewards) inventory = inventory.add(item, n)
-        return CollectResult(
-            progress.copy(inventory = inventory, exploration = progress.exploration.copy(active = null)),
-            finished.site,
-            finished.rewards,
-        )
-    }
 
     /** ログインボーナス(8.2節: 1 日 1 回 100 ポイント)。受け取れたら true。 */
     fun claimLoginBonus(progress: MiniGameProgress, day: Long, config: ExplorationConfig = ExplorationConfig()): Pair<MiniGameProgress, Boolean> {

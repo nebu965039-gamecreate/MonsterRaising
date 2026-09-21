@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知の小さなアイコン(肉球)。通知では単色で表示される -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,13.5c-2.6,0 -5,2.2 -5,4.3c0,1.7 1.5,2.7 3,2.7c0.8,0 1.4,-0.3 2,-0.3s1.2,0.3 2,0.3c1.5,0 3,-1 3,-2.7C17,15.7 14.6,13.5 12,13.5z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.5,9.5m-2,0a2,2.4 0,1 0,4 0a2,2.4 0,1 0,-4 0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.5,5.5m-2,0a2,2.6 0,1 0,4 0a2,2.6 0,1 0,-4 0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M14.5,5.5m-2,0a2,2.6 0,1 0,4 0a2,2.6 0,1 0,-4 0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M18.5,9.5m-2,0a2,2.4 0,1 0,4 0a2,2.4 0,1 0,-4 0" />
+</vector>

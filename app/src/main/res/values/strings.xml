@@ -8,6 +8,9 @@
     <string name="widget_feed">餌</string>
     <string name="widget_clean">掃除</string>
     <string name="widget_pet">なでる</string>
+    <string name="notification_channel_exploration">探索の完了</string>
+    <string name="notification_exploration_title">探索が完了しました</string>
+    <string name="notification_exploration_text">%1$sの探索が終わりました。成果を受け取りましょう。</string>
     <string name="gauge_satiety">満腹</string>
     <string name="gauge_cleanliness">清潔</string>
     <string name="gauge_mood">機嫌</string>
