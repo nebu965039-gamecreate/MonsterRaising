@@ -1,6 +1,8 @@
 package com.nebu965039.monsterraising.ui.wallbreak
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -38,7 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -46,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nebu965039.monsterraising.core.effects.BurstParticles
 import com.nebu965039.monsterraising.core.minigame.ClearRewards
 import com.nebu965039.monsterraising.core.minigame.DayClock
 import com.nebu965039.monsterraising.core.minigame.MiniGame
@@ -76,6 +85,9 @@ import kotlinx.coroutines.withContext
 
 private const val RECORD_FILE = "wallbreak_records.json"
 private const val MAX_FRAME_MS = 100L
+
+/** 壁が砕ける演出 1 件分。[xFraction] は壁の並びの左端を 0、右端を 1 とした位置。 */
+private data class BurstEvent(val seed: Int, val color: WallColor, val xFraction: Float, val startMs: Long)
 
 /** 1 プレイが終わったあとに表示する内容。 */
 private data class WallBreakSummary(
@@ -240,6 +252,11 @@ private fun PlayView(game: WallBreakGame, onFinished: (WallBreakResult) -> Unit)
     var oneShot by remember(game) { mutableStateOf<String?>(null) }
     var shotToken by remember(game) { mutableIntStateOf(0) }
     val finished by rememberUpdatedState(onFinished)
+    val wallImages = remember { WallImages.load(context) }
+    // 壁が砕ける演出。時計はフレームごとに進め、終わった演出は取り除く
+    var clockMs by remember(game) { mutableLongStateOf(0L) }
+    var bursts by remember(game) { mutableStateOf(listOf<BurstEvent>()) }
+    var burstCount by remember(game) { mutableIntStateOf(0) }
 
     LaunchedEffect(game) {
         var last = -1L
@@ -247,6 +264,8 @@ private fun PlayView(game: WallBreakGame, onFinished: (WallBreakResult) -> Unit)
             withFrameMillis { now ->
                 if (last >= 0) game.tick(minOf(now - last, MAX_FRAME_MS))
                 last = now
+                clockMs = now
+                if (bursts.isNotEmpty()) bursts = bursts.filter { now - it.startMs < BurstParticles.DURATION_MS }
                 frame++
             }
         }
@@ -255,8 +274,14 @@ private fun PlayView(game: WallBreakGame, onFinished: (WallBreakResult) -> Unit)
     }
 
     fun choose(index: Int) {
+        val wallColor = game.prompt.walls.getOrNull(index)
+        val wallCount = game.prompt.walls.size
         val outcome = game.choose(index)
         if (outcome == ChoiceOutcome.IGNORED) return
+        if (wallColor != null && outcome != ChoiceOutcome.MISS) {
+            burstCount++
+            bursts = bursts + BurstEvent(burstCount, wallColor, (index + 0.5f) / wallCount, clockMs)
+        }
         feedback = outcome
         oneShot = if (outcome == ChoiceOutcome.MISS) "damage" else "attack"
         shotToken++
@@ -318,18 +343,48 @@ private fun PlayView(game: WallBreakGame, onFinished: (WallBreakResult) -> Unit)
             )
         }
 
-        // 壁(正面に並ぶ)
-        Row(Modifier.fillMaxWidth().height(96.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            prompt.walls.forEachIndexed { i, color ->
-                val edge = if (color == WallColor.BLACK) Color(0xFFEEEEEE) else Color(0xFF2B1B12)
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        .background(color.toColor(), RoundedCornerShape(10.dp))
-                        .border(BorderStroke(4.dp, edge), RoundedCornerShape(10.dp))
-                        .clickable(enabled = f >= 0 && !game.isFinished) { choose(i) },
-                )
+        // 壁(正面に並ぶ)。壊れた壁は、破片がはじけ飛ぶ
+        Box(Modifier.fillMaxWidth().height(96.dp)) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                prompt.walls.forEachIndexed { i, color ->
+                    val edge = if (color == WallColor.BLACK) Color(0xFFEEEEEE) else Color(0xFF2B1B12)
+                    val shape = RoundedCornerShape(10.dp)
+                    val image = wallImages[color]
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .clip(shape)
+                            .background(color.toColor(), shape)
+                            .clickable(enabled = f >= 0 && !game.isFinished) { choose(i) },
+                    ) {
+                        if (image != null) {
+                            Image(
+                                bitmap = image,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.FillBounds,
+                                filterQuality = FilterQuality.None,
+                            )
+                        }
+                        Box(Modifier.fillMaxSize().border(BorderStroke(4.dp, edge), shape))
+                    }
+                }
+            }
+            Canvas(Modifier.matchParentSize()) {
+                for (b in bursts) {
+                    val cx = size.width * b.xFraction
+                    val cy = size.height / 2f
+                    val unit = size.height
+                    for (fr in BurstParticles.fragments(b.seed, clockMs - b.startMs)) {
+                        val side = fr.size * unit
+                        val topLeft = Offset(cx + fr.dx * unit - side / 2f, cy + fr.dy * unit - side / 2f)
+                        rotate(fr.rotation, pivot = Offset(cx + fr.dx * unit, cy + fr.dy * unit)) {
+                            drawRect(b.color.toColor(), topLeft, Size(side, side), alpha = fr.alpha)
+                            drawRect(Color(0xFF2B1B12), topLeft, Size(side, side), alpha = fr.alpha, style = androidx.compose.ui.graphics.drawscope.Stroke(width = side * 0.15f))
+                        }
+                    }
+                }
             }
         }
     }
