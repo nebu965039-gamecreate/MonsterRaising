@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "MonsterRaising"
 include(":app")
 include(":minigames:puzzle")
+include(":minigames:card")

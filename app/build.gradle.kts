@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime)
     implementation(project(":minigames:puzzle"))
+    implementation(project(":minigames:card"))
 
     debugImplementation(libs.androidx.ui.tooling)
 

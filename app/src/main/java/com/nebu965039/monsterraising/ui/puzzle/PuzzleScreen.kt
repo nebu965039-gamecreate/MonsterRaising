@@ -66,6 +66,8 @@ import com.nebu965039.monsterraising.minigame.puzzle.PieceType
 import com.nebu965039.monsterraising.minigame.puzzle.PuzzleGame
 import com.nebu965039.monsterraising.minigame.puzzle.PuzzleResult
 import com.nebu965039.monsterraising.ui.demo.DemoClock
+import com.nebu965039.monsterraising.ui.minigame.PlayLimitPanel
+import com.nebu965039.monsterraising.ui.minigame.rewardsText
 import com.nebu965039.monsterraising.widget.PetWidgetUpdater
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -82,29 +84,6 @@ private data class PlaySummary(
     val capped: Boolean,
     val rewards: ClearRewards?,
 )
-
-private fun itemName(item: ItemType) = when (item) {
-    ItemType.RICE -> "ごはん"
-    ItemType.MINIGAME_TICKET -> "ミニゲーム券"
-    ItemType.ELIXIR -> "長寿の秘薬"
-    ItemType.EQUIP_STRENGTH -> "筋力の装備"
-    ItemType.EQUIP_INTELLECT -> "知力の装備"
-    ItemType.EQUIP_SATIETY -> "満腹の装備"
-    ItemType.EQUIP_CLEANLINESS -> "清潔の装備"
-    ItemType.EQUIP_BALANCE_EFFECT -> "バランスの装備(有効度)"
-    ItemType.EQUIP_BALANCE_CARE -> "バランスの装備(お世話)"
-}
-
-private fun rewardsText(r: ClearRewards) =
-    (listOf("探索ポイント ${r.explorationPoints}") + r.items.map { (item, n) -> "${itemName(item)} ×$n" }).joinToString(" / ")
-
-private fun inventoryText(p: MiniGameProgress): String {
-    val inv = p.inventory
-    val equipment = ItemType.entries.filter { it.name.startsWith("EQUIP_") && inv.count(it) > 0 }
-        .joinToString(" ") { "${itemName(it)}×${inv.count(it)}" }
-    return "所持: 探索ポイント ${inv.explorationPoints} / ごはん ${inv.count(ItemType.RICE)} / ミニゲーム券 ${inv.count(ItemType.MINIGAME_TICKET)}" +
-        if (equipment.isNotEmpty()) " / $equipment" else ""
-}
 
 private fun Difficulty.label() = when (this) {
     Difficulty.BEGINNER -> "初級"
@@ -200,28 +179,21 @@ fun PuzzleScreen() {
             if (isEgg) {
                 Text("卵の間は遊べません。", color = MaterialTheme.colorScheme.error)
             }
-            val status = progress.playStatus(MiniGame.PUZZLE, day())
-            Text(
-                "今日のプレイ ${status.playsToday} / ${status.allowedPlays} 回(残り ${status.remaining} 回)",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(inventoryText(progress), style = MaterialTheme.typography.bodySmall)
-            if (status.remaining > 0) {
-                Button(enabled = !isEgg, onClick = { startGame(difficulty) }) { Text("スタート") }
-            } else {
-                Text("今日の回数を使い切りました。広告を見るか、ミニゲーム券を使うと 1 回遊べます。", style = MaterialTheme.typography.bodyMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PlayLimitPanel(
+                status = progress.playStatus(MiniGame.PUZZLE, day()),
+                progress = progress,
+                startEnabled = !isEgg,
+                onStart = { startGame(difficulty) },
+                onWatchAd = {
                     // 広告は Phase 8 で実装する。それまではデモとして、広告なしで 1 回追加する
-                    OutlinedButton(enabled = status.canWatchAd, onClick = {
-                        progressStore.update { p -> (p.addAdPlay(MiniGame.PUZZLE, day()) ?: p) to Unit }
-                        progress = progressStore.load()
-                    }) { Text("広告を見て +1 回(デモ)") }
-                    OutlinedButton(enabled = status.tickets > 0, onClick = {
-                        progressStore.update { p -> (p.addTicketPlay(MiniGame.PUZZLE, day()) ?: p) to Unit }
-                        progress = progressStore.load()
-                    }) { Text("ミニゲーム券で +1 回(所持 ${status.tickets})") }
-                }
-            }
+                    progressStore.update { p -> (p.addAdPlay(MiniGame.PUZZLE, day()) ?: p) to Unit }
+                    progress = progressStore.load()
+                },
+                onUseTicket = {
+                    progressStore.update { p -> (p.addTicketPlay(MiniGame.PUZZLE, day()) ?: p) to Unit }
+                    progress = progressStore.load()
+                },
+            )
         }
     }
 }
