@@ -44,11 +44,18 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.nebu965039.monsterraising.core.minigame.ClearRewards
+import com.nebu965039.monsterraising.core.minigame.DayClock
+import com.nebu965039.monsterraising.core.minigame.ItemType
+import com.nebu965039.monsterraising.core.minigame.MiniGame
+import com.nebu965039.monsterraising.core.minigame.MiniGameProgress
 import com.nebu965039.monsterraising.core.minigame.MinigameGains
 import com.nebu965039.monsterraising.core.minigame.PuzzleRecords
 import com.nebu965039.monsterraising.core.minigame.PuzzleRewards
+import com.nebu965039.monsterraising.core.minigame.RewardTier
 import com.nebu965039.monsterraising.core.pet.PetSimulator
 import com.nebu965039.monsterraising.core.pet.Stage
+import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
 import com.nebu965039.monsterraising.data.PuzzleRecordStore
 import com.nebu965039.monsterraising.minigame.puzzle.Cell
@@ -71,7 +78,33 @@ private data class PlaySummary(
     val applied: Boolean,
     val isNewHighScore: Boolean,
     val isFirstClear: Boolean,
+    /** 有効度が 1 日の上限で削られた */
+    val capped: Boolean,
+    val rewards: ClearRewards?,
 )
+
+private fun itemName(item: ItemType) = when (item) {
+    ItemType.RICE -> "ごはん"
+    ItemType.MINIGAME_TICKET -> "ミニゲーム券"
+    ItemType.ELIXIR -> "長寿の秘薬"
+    ItemType.EQUIP_STRENGTH -> "筋力の装備"
+    ItemType.EQUIP_INTELLECT -> "知力の装備"
+    ItemType.EQUIP_SATIETY -> "満腹の装備"
+    ItemType.EQUIP_CLEANLINESS -> "清潔の装備"
+    ItemType.EQUIP_BALANCE_EFFECT -> "バランスの装備(有効度)"
+    ItemType.EQUIP_BALANCE_CARE -> "バランスの装備(お世話)"
+}
+
+private fun rewardsText(r: ClearRewards) =
+    (listOf("探索ポイント ${r.explorationPoints}") + r.items.map { (item, n) -> "${itemName(item)} ×$n" }).joinToString(" / ")
+
+private fun inventoryText(p: MiniGameProgress): String {
+    val inv = p.inventory
+    val equipment = ItemType.entries.filter { it.name.startsWith("EQUIP_") && inv.count(it) > 0 }
+        .joinToString(" ") { "${itemName(it)}×${inv.count(it)}" }
+    return "所持: 探索ポイント ${inv.explorationPoints} / ごはん ${inv.count(ItemType.RICE)} / ミニゲーム券 ${inv.count(ItemType.MINIGAME_TICKET)}" +
+        if (equipment.isNotEmpty()) " / $equipment" else ""
+}
 
 private fun Difficulty.label() = when (this) {
     Difficulty.BEGINNER -> "初級"
@@ -86,23 +119,45 @@ fun PuzzleScreen() {
     val context = LocalContext.current
     val petStore = remember { PetStore(context) }
     val recordStore = remember { PuzzleRecordStore(context) }
+    val progressStore = remember { MiniGameStore(context) }
+    var progress by remember { mutableStateOf(progressStore.load()) }
+    fun day() = DayClock.dayIndex(DemoClock.now())
     var difficulty by remember { mutableStateOf(Difficulty.BEGINNER) }
     var game by remember { mutableStateOf<PuzzleGame?>(null) }
     var records by remember { mutableStateOf(recordStore.load()) }
     var summary by remember { mutableStateOf<PlaySummary?>(null) }
     val isEgg = petStore.load()?.stage == Stage.EGG
 
+    /** プレイ回数を 1 つ使って始める。上限に達していれば始めない。 */
+    fun startGame(target: Difficulty) {
+        val started = progressStore.update { p ->
+            val next = p.startPlay(MiniGame.PUZZLE, day())
+            if (next == null) p to false else next to true
+        }
+        progress = progressStore.load()
+        if (started) game = PuzzleGame(target)
+    }
+
     fun finish(result: PuzzleResult) {
-        val gains = PuzzleRewards.gains(result)
-        val before = petStore.load()
-        val after = petStore.update(DemoClock.now()) { PetSimulator.applyMinigame(it, DemoClock.now(), gains) }
         val update = recordStore.record(result)
         records = update.records
+        val settlement = progressStore.update { p ->
+            val s = p.settle(
+                MiniGame.PUZZLE, day(), RewardTier.valueOf(result.difficulty.name),
+                cleared = result.cleared, firstClear = update.isFirstClear, gains = PuzzleRewards.gains(result),
+            )
+            s.progress to s
+        }
+        progress = settlement.progress
+        val before = petStore.load()
+        val after = petStore.update(DemoClock.now()) { PetSimulator.applyMinigame(it, DemoClock.now(), settlement.appliedGains) }
         summary = PlaySummary(
-            result, gains,
+            result, settlement.appliedGains,
             applied = before != null && before.stage != Stage.EGG && after.generation == before.generation,
             isNewHighScore = update.isNewHighScore,
             isFirstClear = update.isFirstClear,
+            capped = settlement.capped,
+            rewards = settlement.rewards,
         )
         PetWidgetUpdater.updateAll(context)
     }
@@ -113,8 +168,14 @@ fun PuzzleScreen() {
         current != null && result == null -> PlayView(current, onFinished = { finish(it) })
         result != null -> ResultView(
             result,
-            onRetry = { summary = null; game = PuzzleGame(result.result.difficulty) },
+            onRetry = {
+                summary = null
+                difficulty = result.result.difficulty
+                game = null
+                startGame(difficulty)
+            },
             onMenu = { summary = null; game = null },
+            canRetry = progress.playStatus(MiniGame.PUZZLE, day()).remaining > 0,
         )
         else -> Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -139,7 +200,28 @@ fun PuzzleScreen() {
             if (isEgg) {
                 Text("卵の間は遊べません。", color = MaterialTheme.colorScheme.error)
             }
-            Button(enabled = !isEgg, onClick = { game = PuzzleGame(difficulty) }) { Text("スタート") }
+            val status = progress.playStatus(MiniGame.PUZZLE, day())
+            Text(
+                "今日のプレイ ${status.playsToday} / ${status.allowedPlays} 回(残り ${status.remaining} 回)",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(inventoryText(progress), style = MaterialTheme.typography.bodySmall)
+            if (status.remaining > 0) {
+                Button(enabled = !isEgg, onClick = { startGame(difficulty) }) { Text("スタート") }
+            } else {
+                Text("今日の回数を使い切りました。広告を見るか、ミニゲーム券を使うと 1 回遊べます。", style = MaterialTheme.typography.bodyMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 広告は Phase 8 で実装する。それまではデモとして、広告なしで 1 回追加する
+                    OutlinedButton(enabled = status.canWatchAd, onClick = {
+                        progressStore.update { p -> (p.addAdPlay(MiniGame.PUZZLE, day()) ?: p) to Unit }
+                        progress = progressStore.load()
+                    }) { Text("広告を見て +1 回(デモ)") }
+                    OutlinedButton(enabled = status.tickets > 0, onClick = {
+                        progressStore.update { p -> (p.addTicketPlay(MiniGame.PUZZLE, day()) ?: p) to Unit }
+                        progress = progressStore.load()
+                    }) { Text("ミニゲーム券で +1 回(所持 ${status.tickets})") }
+                }
+            }
         }
     }
 }
@@ -255,7 +337,7 @@ private fun HoldButton(label: String, modifier: Modifier, repeat: Boolean, onAct
 }
 
 @Composable
-private fun ResultView(summary: PlaySummary, onRetry: () -> Unit, onMenu: () -> Unit) {
+private fun ResultView(summary: PlaySummary, canRetry: Boolean, onRetry: () -> Unit, onMenu: () -> Unit) {
     val r = summary.result
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -284,8 +366,14 @@ private fun ResultView(summary: PlaySummary, onRetry: () -> Unit, onMenu: () -> 
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
+        if (summary.capped) {
+            Text("今日の有効度の上限に達したため、加算が一部(または全部)反映されませんでした", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+        }
+        summary.rewards?.let { rewards ->
+            Text("クリア報酬: ${rewardsText(rewards)}", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onRetry) { Text("もう一度") }
+            Button(enabled = canRetry, onClick = onRetry) { Text("もう一度") }
             OutlinedButton(onClick = onMenu) { Text("メニューへ") }
         }
     }
