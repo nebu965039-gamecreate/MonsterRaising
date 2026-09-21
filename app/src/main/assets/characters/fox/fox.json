@@ -1,0 +1,80 @@
+{
+  "id": "fox",
+  "size": 48,
+  "frames": {
+    "normal": "frames/normal.png",
+    "walk": "frames/walk.png",
+    "happy": "frames/happy.png",
+    "sad": "frames/sad.png",
+    "attack": "frames/attack.png",
+    "damage": "frames/damage.png",
+    "eat_1": "frames/eat_1.png",
+    "eat_2": "frames/eat_2.png",
+    "dirty": "frames/dirty.png"
+  },
+  "animations": {
+    "idle": {
+      "loop": true,
+      "steps": [
+        { "frame": "normal", "ms": 700 },
+        { "frame": "walk", "ms": 250 }
+      ]
+    },
+    "walk": {
+      "loop": true,
+      "steps": [
+        { "frame": "walk", "ms": 250 },
+        { "frame": "normal", "ms": 250 }
+      ]
+    },
+    "happy": {
+      "loop": false,
+      "next": "idle",
+      "steps": [
+        { "frame": "happy", "ms": 400 },
+        { "frame": "normal", "ms": 200 },
+        { "frame": "happy", "ms": 400 }
+      ]
+    },
+    "sad": {
+      "loop": true,
+      "steps": [
+        { "frame": "sad", "ms": 1000 }
+      ]
+    },
+    "attack": {
+      "loop": false,
+      "next": "idle",
+      "steps": [
+        { "frame": "attack", "ms": 300 },
+        { "frame": "normal", "ms": 150 },
+        { "frame": "attack", "ms": 300 }
+      ]
+    },
+    "damage": {
+      "loop": false,
+      "next": "idle",
+      "steps": [
+        { "frame": "damage", "ms": 250 },
+        { "frame": "normal", "ms": 100 },
+        { "frame": "damage", "ms": 250 }
+      ]
+    },
+    "eat": {
+      "loop": false,
+      "next": "happy",
+      "steps": [
+        { "frame": "eat_1", "ms": 400 },
+        { "frame": "eat_2", "ms": 400 },
+        { "frame": "eat_1", "ms": 400 },
+        { "frame": "eat_2", "ms": 400 }
+      ]
+    },
+    "dirty": {
+      "loop": true,
+      "steps": [
+        { "frame": "dirty", "ms": 1000 }
+      ]
+    }
+  }
+}
