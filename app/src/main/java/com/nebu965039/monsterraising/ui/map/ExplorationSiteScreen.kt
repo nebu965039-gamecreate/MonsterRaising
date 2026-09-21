@@ -84,19 +84,19 @@ private fun ExplorationSite.background(): Brush = when (this) {
 }
 
 /**
- * ワールドマップ(基本設計書10.4節)と探索拠点(8節)の画面。
- * マップで拠点を選ぶと拠点の画面に移り、「探索する / この場を離れる」→「少し探索(1回)/ じっくり探索(10回)」と選ぶと、
+ * 探索拠点(基本設計書8節)の画面。ワールドマップ(10.4節)で拠点を選ぶと、この画面に移る。
+ * 「探索をしますか? / `探索する` / `この場を離れる`」→「少し探索(1回)/ じっくり探索(10回)」と選ぶと、
  * キャラクターが背景のほうへ小さくなっていき、探索が始まる。探索中は「探索中(残り〜)」と表示する。
  * 同時に探索できるのは 1 か所で、フレンドがいれば 3 か所まで。2 か所目以降は「フレンドが協力しに来てくれました」と表示する(8.6節)。
+ * `この場を離れる` を選ぶと、ワールドマップに戻る([onLeave])。
  */
 @Composable
-fun MapScreen() {
+fun ExplorationSiteScreen(site: ExplorationSite, onLeave: () -> Unit) {
     val context = LocalContext.current
     val store = remember { MiniGameStore(context) }
     val petStore = remember { PetStore(context) }
     var progress by remember { mutableStateOf(store.load()) }
     var nowMs by remember { mutableLongStateOf(DemoClock.now()) }
-    var site by remember { mutableStateOf<ExplorationSite?>(null) }
 
     // Android 13 以降は、通知の許可を求める(探索の完了を通知するため)
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -115,7 +115,7 @@ fun MapScreen() {
             delay(1_000)
         }
     }
-    // ログインボーナスは、アプリを開いたときに受け取る(MainActivity)。ほかの画面で増えた持ち物を読み直す
+    // ログインボーナスは、アプリを開いたときに受け取る(AppRoot)。ほかの画面で増えた持ち物を読み直す
     LaunchedEffect(Unit) {
         while (true) {
             progress = store.load()
@@ -123,81 +123,38 @@ fun MapScreen() {
         }
     }
 
-    val isEgg = petStore.load()?.stage == Stage.EGG
-    val current = site
-    if (current == null) {
-        WorldMap(progress, nowMs, onSelect = { site = it })
-    } else {
-        SiteView(
-            site = current,
-            progress = progress,
-            nowMs = nowMs,
-            isEgg = isEgg,
-            onStart = { plan ->
-                requestNotificationPermission()
-                val started = store.update { p ->
-                    when (val r = Exploration.start(p, current, plan, DemoClock.now(), hasFriends = DemoFriends.hasFriends)) {
-                        is StartResult.Started -> r.progress to r.progress.exploration.actives.first { it.site == current }
-                        else -> p to null
-                    }
+    SiteView(
+        site = site,
+        progress = progress,
+        nowMs = nowMs,
+        isEgg = petStore.load()?.stage == Stage.EGG,
+        onStart = { plan ->
+            requestNotificationPermission()
+            val started = store.update { p ->
+                when (val r = Exploration.start(p, site, plan, DemoClock.now(), hasFriends = DemoFriends.hasFriends)) {
+                    is StartResult.Started -> r.progress to r.progress.exploration.actives.first { it.site == site }
+                    else -> p to null
                 }
-                progress = store.load()
-                if (started != null) {
-                    // 終わる時刻に、完了の通知を出す(予約は端末の再起動後も残る)
-                    ExplorationNotificationWorker.schedule(context, current, started.startedAtMs, started.endsAtMs - started.startedAtMs)
-                    PetWidgetUpdater.updateAll(context)
-                }
-                started != null
-            },
-            onCollect = {
-                val result = store.update { p ->
-                    val c = Exploration.collect(p, current, DemoClock.now())
-                    (c?.progress ?: p) to c?.rewards
-                }
-                progress = store.load()
+            }
+            progress = store.load()
+            if (started != null) {
+                // 終わる時刻に、完了の通知を出す(予約は端末の再起動後も残る)
+                ExplorationNotificationWorker.schedule(context, site, started.startedAtMs, started.endsAtMs - started.startedAtMs)
                 PetWidgetUpdater.updateAll(context)
-                result
-            },
-            onLeave = { site = null },
-        )
-    }
-}
-
-@Composable
-private fun WorldMap(progress: MiniGameProgress, nowMs: Long, onSelect: (ExplorationSite) -> Unit) {
-    val capacity = config.capacity(DemoFriends.hasFriends)
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("ワールドマップ", style = MaterialTheme.typography.titleLarge)
-        Text("探索ポイント ${progress.inventory.explorationPoints}", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "同時に探索できる拠点: ${progress.exploration.actives.size} / $capacity" +
-                if (DemoFriends.hasFriends) "(フレンドの協力で最大 3 か所)" else "(フレンドがいると最大 3 か所)",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text("探索に行く拠点を選んでください。", style = MaterialTheme.typography.bodyMedium)
-        ExplorationSite.entries.forEach { s ->
-            val status = Exploration.status(progress, s, nowMs)
-            val label = when (status) {
-                is ExplorationStatus.InProgress -> "探索中(残り ${Exploration.remainingText(status.remainingMs)})"
-                is ExplorationStatus.Finished -> "探索が終わりました(受け取れます)"
-                ExplorationStatus.Idle -> ""
             }
-            Button(onClick = { onSelect(s) }, modifier = Modifier.fillMaxWidth()) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(s.displayName, style = MaterialTheme.typography.titleMedium)
-                    if (label.isNotEmpty()) Text(label, style = MaterialTheme.typography.bodySmall)
-                }
+            started != null
+        },
+        onCollect = {
+            val result = store.update { p ->
+                val c = Exploration.collect(p, site, DemoClock.now())
+                (c?.progress ?: p) to c?.rewards
             }
-        }
-        Text("自宅・ゲーム拠点などは、今後ここに追加されます。", style = MaterialTheme.typography.bodySmall)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Switch(checked = DemoFriends.hasFriends, onCheckedChange = { DemoFriends.hasFriends = it })
-            Text("フレンドがいる(動作確認用)", style = MaterialTheme.typography.bodySmall)
-        }
-    }
+            progress = store.load()
+            PetWidgetUpdater.updateAll(context)
+            result
+        },
+        onLeave = onLeave,
+    )
 }
 
 @Composable
