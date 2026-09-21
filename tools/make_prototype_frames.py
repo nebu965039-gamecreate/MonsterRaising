@@ -2,6 +2,7 @@
 
   eat_1 / eat_2 : 食事(口元に餌を持たせる。eat_2 は齧った状態)
   dirty         : 清潔度 0 用(煤+アホ毛、設計書 4.6 / 10.2.2)
+  idle_up       : idle の揺れ用。頭・胴体・尻尾を 1px 上げ、足元は固定した差分フレーム
 本番ドット絵に差し替えるまでの仮素材。make_demo_frames.py の後に実行する。
 """
 from pathlib import Path
@@ -9,6 +10,20 @@ from pathlib import Path
 from PIL import Image
 
 FRAMES = Path(__file__).resolve().parent.parent / "app" / "src" / "main" / "assets" / "characters" / "fox" / "frames"
+
+# normal フレームで足(ブーツ)が始まる行の直前。この行以上(上側)を 1px 上げ、これより下は固定する。
+IDLE_BODY_BOTTOM = 39
+
+
+def idle_up(normal: Image.Image) -> Image.Image:
+    out = normal.copy()
+    w, _ = normal.size
+    body = normal.crop((0, 1, w, IDLE_BODY_BOTTOM + 1))  # 元の 1..39 行目
+    # 頭・胴体を 1px 上へ。境界の行は元の行を複製して隙間を埋める(1px 伸びる)
+    out.paste((0, 0, 0, 0), (0, 0, w, IDLE_BODY_BOTTOM + 1))
+    out.paste(body, (0, 0))
+    out.paste(normal.crop((0, IDLE_BODY_BOTTOM, w, IDLE_BODY_BOTTOM + 1)), (0, IDLE_BODY_BOTTOM))
+    return out
 
 OUTLINE = (74, 40, 24, 255)
 APPLE = (214, 48, 48, 255)
@@ -57,6 +72,8 @@ def main() -> None:
     put(d, [(27, 9), (28, 8), (28, 7), (27, 6)], HAIR)
     put(d, [(21, 9), (20, 8), (19, 8)], HAIR)
     d.save(FRAMES / "dirty.png", optimize=True)
+
+    idle_up(normal).save(FRAMES / "idle_up.png", optimize=True)
 
 
 if __name__ == "__main__":

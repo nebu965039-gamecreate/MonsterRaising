@@ -10,14 +10,15 @@
     "damage": "frames/damage.png",
     "eat_1": "frames/eat_1.png",
     "eat_2": "frames/eat_2.png",
-    "dirty": "frames/dirty.png"
+    "dirty": "frames/dirty.png",
+    "idle_up": "frames/idle_up.png"
   },
   "animations": {
     "idle": {
       "loop": true,
       "steps": [
         { "frame": "normal", "ms": 700 },
-        { "frame": "normal", "ms": 700, "dy": -1 }
+        { "frame": "idle_up", "ms": 700 }
       ]
     },
     "walk": {
