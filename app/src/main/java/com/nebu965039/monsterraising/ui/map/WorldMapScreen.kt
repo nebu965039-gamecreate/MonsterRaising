@@ -31,8 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -60,13 +65,14 @@ import kotlin.math.roundToInt
 
 private val SEA = Color(0xFFBFE3F5)
 private val ICON_WIDTH = 96.dp
-private val ICON_CIRCLE = 60.dp
+private val ICON_CIRCLE = 58.dp
+private val CURRENT_COLOR = Color(0xFFD9683A)
 
 /**
- * ワールドマップ画面(基本設計書10.4節)。拠点(自宅・ゲーム拠点・探索拠点)をアイコンで配置した地図で、
- * 拠点をタップすると、その拠点に対応する画面へ移る([onSelect])。
- * 現在地には、育てているキャラクターの小さいアイコンを表示する。拠点間を結ぶ固定のルートは表示しない。
- * 未解放の拠点はグレーアウトして、選べない。探索中の拠点には「探索中(残り〜)」を表示する。
+ * ワールドマップ画面(基本設計書10.4節。ワイヤーフレームに準拠)。拠点(自宅・ゲーム拠点・探索拠点)を
+ * 白い丸アイコン(拠点の種類で縁の色を変える)で配置した地図で、拠点をタップすると対応する画面へ移る([onSelect])。
+ * 現在地には、育てているキャラクターの小さいアイコンと「ここにいる」の表示を出す。拠点間を結ぶ固定のルートは表示しない。
+ * 未解放の拠点は破線の縁+鍵アイコンで表示して、選べない。探索中の拠点には「探索中(残り〜)」を表示する。
  */
 @Composable
 fun WorldMapScreen(onSelect: (MapLocationId) -> Unit) {
@@ -129,58 +135,207 @@ private fun badgeOf(loc: MapLocation, inProgress: List<ExplorationStatus.InProgr
     return null
 }
 
-/** 地図の背景(本番の地図画像ができるまでの仮の描画)。拠点ごとに地形の色を変える。 */
+/** 地図の背景(本番の地図画像ができるまでの仮の描画。ワイヤーフレームの山のシルエットに準拠)。 */
 @Composable
 private fun MapBackground() {
     Canvas(Modifier.fillMaxSize()) {
-        val m = minOf(size.width, size.height)
-        fun blob(color: Color, fx: Float, fy: Float, r: Float) = drawCircle(color, m * r, Offset(size.width * fx, size.height * fy))
-        blob(Color(0xFFD3E8B5), 0.50f, 0.58f, 0.36f) // 陸地(草原)
-        blob(Color(0xFFC6E0A0), 0.28f, 0.72f, 0.24f) // 自宅のあたり
-        blob(Color(0xFFE4E0B8), 0.74f, 0.70f, 0.22f) // ゲーム拠点のあたり
-        blob(Color(0xFFB7AE9C), 0.20f, 0.26f, 0.16f) // 洞窟のあたり
-        blob(Color(0xFF9DB58A), 0.50f, 0.12f, 0.15f) // 山のあたり
-        blob(Color(0xFFF1DFA8), 0.80f, 0.30f, 0.15f) // 海岸のあたり
+        val w = size.width
+        val h = size.height
+        val mountain = Color(0xFF2F4A34)
+        fun tri(fx: Float, fy: Float, fw: Float, fh: Float, alpha: Float) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * fx, h * (fy + fh))
+                lineTo(w * (fx + fw / 2), h * fy)
+                lineTo(w * (fx + fw), h * (fy + fh))
+                close()
+            }
+            drawPath(path, mountain, alpha = alpha)
+        }
+        tri(-0.03f, 0.12f, 0.18f, 0.12f, 0.35f)
+        tri(0.77f, 0.07f, 0.15f, 0.11f, 0.3f)
+        tri(0.0f, 0.74f, 0.17f, 0.12f, 0.3f)
     }
+}
+
+/** 拠点の種類ごとの縁の色(ワイヤーフレームに準拠)。 */
+private fun edgeColor(kind: LocationKind): Color = when (kind) {
+    LocationKind.HOME -> CURRENT_COLOR
+    LocationKind.GAME_BASE -> Color(0xFF3F6F65)
+    LocationKind.EXPLORATION -> Color(0xFF7A6350)
 }
 
 @Composable
 private fun LocationIcon(loc: MapLocation, badge: String?, isCurrent: Boolean, sprite: LoadedSprite?, onClick: () -> Unit) {
-    val edge = when (loc.kind) {
-        LocationKind.HOME -> Color(0xFF4CAF50)
-        LocationKind.GAME_BASE -> Color(0xFFF59A2B)
-        LocationKind.EXPLORATION -> Color(0xFF3F7FE0)
-    }
+    val edge = edgeColor(loc.kind)
     Column(
         Modifier.width(ICON_WIDTH).clickable(enabled = loc.unlocked, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // 未解放の拠点はグレーアウトして、鍵を表示する
-        Box(
-            Modifier
-                .size(ICON_CIRCLE)
-                .alpha(if (loc.unlocked) 1f else 0.4f)
-                .background(if (loc.unlocked) Color.White else Color(0xFFBDBDBD), CircleShape)
-                .border(3.dp, if (loc.unlocked) edge else Color(0xFF757575), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(if (loc.unlocked) loc.icon else "🔒", fontSize = 28.sp)
-        }
-        // 現在地には、育てているキャラクターの小さいアイコンを表示する
-        if (isCurrent && sprite != null) {
-            Box(Modifier.offset(x = 30.dp, y = (-ICON_CIRCLE - 6.dp))) {
-                SpritePlayer(sprite, animation = "idle", scale = 1)
+        // アイコン本体と「現在地」マーカーは 1 つの Box にまとめる(マーカーは offset で浮かせるだけにして、
+        // 下の Column に余計な高さを持たせない。Column の子として並べると offset ぶんの空白ができてしまう)
+        Box(contentAlignment = Alignment.TopCenter) {
+            if (loc.unlocked) {
+                Box(
+                    Modifier
+                        .size(ICON_CIRCLE)
+                        .background(Color.White, CircleShape)
+                        .border(3.dp, edge, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LocationGlyph(loc.id, edge)
+                }
+            } else {
+                // 未解放の拠点は破線の縁+鍵アイコンで表示して、選べない
+                Box(
+                    Modifier
+                        .size(ICON_CIRCLE - 8.dp)
+                        .alpha(0.7f)
+                        .background(Color(0xFFE7E0D2), CircleShape)
+                        .dashedBorder(Color(0xFFC8BDA6)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LockGlyph()
+                }
+            }
+            // 現在地には、育てているキャラクターの小さいアイコン(上)と「ここにいる」(その下、アイコンとの間)を表示する
+            if (isCurrent && sprite != null) {
+                Box(
+                    Modifier.align(Alignment.TopCenter).offset(x = 30.dp, y = (-66).dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier.size(30.dp).background(Color.White, CircleShape).border(2.dp, CURRENT_COLOR, CircleShape),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) { SpritePlayer(sprite, animation = "idle", scale = 1) }
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-30).dp)
+                        .background(CURRENT_COLOR, RoundedCornerShape(50))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                ) {
+                    Text("ここにいる", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
         Text(
-            loc.displayName,
-            style = MaterialTheme.typography.labelLarge,
+            if (loc.unlocked) loc.displayName else "未解放",
+            Modifier.background(Color(0xD9FFFFFF), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = if (loc.unlocked) Color(0xFF2B1B12) else Color(0xFF757575),
+            color = Color(0xFF3A2A1C),
             textAlign = TextAlign.Center,
         )
         badge?.let {
             Text(it, style = MaterialTheme.typography.labelSmall, color = Color(0xFFB3261E), textAlign = TextAlign.Center)
         }
+    }
+}
+
+/** 破線の丸い縁(未解放の拠点用)。 */
+private fun Modifier.dashedBorder(color: Color): Modifier = this.then(
+    Modifier.drawWithContent {
+        drawContent()
+        val strokeWidth = 3.dp.toPx()
+        drawCircle(
+            color,
+            radius = (size.minDimension - strokeWidth) / 2f,
+            style = Stroke(width = strokeWidth, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))),
+        )
+    },
+)
+
+/** 拠点の種類・場所ごとの、線画アイコン(本番のドット絵ができるまでの仮のアイコン)。 */
+@Composable
+private fun LocationGlyph(id: MapLocationId, color: Color) {
+    Canvas(Modifier.size(26.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        when (id) {
+            MapLocationId.HOME -> {
+                val roof = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.1f, h * 0.48f)
+                    lineTo(w * 0.5f, h * 0.12f)
+                    lineTo(w * 0.9f, h * 0.48f)
+                }
+                drawPath(roof, color, style = stroke)
+                drawRect(color, topLeft = Offset(w * 0.22f, h * 0.42f), size = androidx.compose.ui.geometry.Size(w * 0.56f, h * 0.46f), style = stroke)
+            }
+            MapLocationId.GAME_BASE -> {
+                drawRoundRect(
+                    color,
+                    topLeft = Offset(w * 0.06f, h * 0.32f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.88f, h * 0.44f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.18f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(w * 0.26f, h * 0.54f), Offset(w * 0.4f, h * 0.54f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(color, Offset(w * 0.33f, h * 0.47f), Offset(w * 0.33f, h * 0.61f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawCircle(color, w * 0.045f, Offset(w * 0.68f, h * 0.46f))
+                drawCircle(color, w * 0.045f, Offset(w * 0.78f, h * 0.58f))
+            }
+            MapLocationId.CAVE -> {
+                val arch = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.14f, h * 0.85f)
+                    lineTo(w * 0.14f, h * 0.5f)
+                    cubicTo(w * 0.14f, h * 0.18f, w * 0.86f, h * 0.18f, w * 0.86f, h * 0.5f)
+                    lineTo(w * 0.86f, h * 0.85f)
+                }
+                drawPath(arch, color, style = stroke)
+            }
+            MapLocationId.COAST -> {
+                for (row in 0..1) {
+                    val y = h * (0.42f + row * 0.24f)
+                    val wave = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(w * 0.08f, y)
+                        cubicTo(w * 0.24f, y - h * 0.1f, w * 0.38f, y + h * 0.1f, w * 0.5f, y)
+                        cubicTo(w * 0.62f, y - h * 0.1f, w * 0.76f, y + h * 0.1f, w * 0.92f, y)
+                    }
+                    drawPath(wave, color, style = stroke)
+                }
+            }
+            MapLocationId.MOUNTAIN -> {
+                // 「森」の木のアイコン(名残の識別子。core/map/WorldMap.kt のコメント参照)
+                val tree = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.5f, h * 0.1f)
+                    lineTo(w * 0.78f, h * 0.55f)
+                    lineTo(w * 0.6f, h * 0.55f)
+                    lineTo(w * 0.85f, h * 0.85f)
+                    lineTo(w * 0.15f, h * 0.85f)
+                    lineTo(w * 0.4f, h * 0.55f)
+                    lineTo(w * 0.22f, h * 0.55f)
+                    close()
+                }
+                drawPath(tree, color)
+                drawLine(color, Offset(w * 0.5f, h * 0.85f), Offset(w * 0.5f, h * 0.95f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+            }
+        }
+    }
+}
+
+/** 未解放の拠点に出す、鍵のアイコン。 */
+@Composable
+private fun LockGlyph() {
+    Canvas(Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val color = Color(0xFF8A7660)
+        val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawRoundRect(
+            color,
+            topLeft = Offset(w * 0.14f, h * 0.46f),
+            size = androidx.compose.ui.geometry.Size(w * 0.72f, h * 0.44f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.08f),
+            style = stroke,
+        )
+        val shackle = androidx.compose.ui.graphics.Path().apply {
+            moveTo(w * 0.28f, h * 0.46f)
+            lineTo(w * 0.28f, h * 0.3f)
+            cubicTo(w * 0.28f, h * 0.08f, w * 0.72f, h * 0.08f, w * 0.72f, h * 0.3f)
+            lineTo(w * 0.72f, h * 0.46f)
+        }
+        drawPath(shackle, color, style = stroke)
     }
 }

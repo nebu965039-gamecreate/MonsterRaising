@@ -33,10 +33,10 @@ import com.nebu965039.monsterraising.data.PetStore
 import com.nebu965039.monsterraising.data.dexStore
 import com.nebu965039.monsterraising.ui.card.CardScreen
 import com.nebu965039.monsterraising.ui.demo.DemoClock
-import com.nebu965039.monsterraising.ui.demo.PetDemoScreen
 import com.nebu965039.monsterraising.ui.dev.DevScreen
 import com.nebu965039.monsterraising.ui.dex.DexScreen
 import com.nebu965039.monsterraising.ui.friends.FriendsScreen
+import com.nebu965039.monsterraising.ui.home.HomeScreen
 import com.nebu965039.monsterraising.ui.settings.SettingsScreen
 import com.nebu965039.monsterraising.ui.game.GameSelectScreen
 import com.nebu965039.monsterraising.ui.items.ItemsScreen
@@ -115,21 +115,20 @@ fun AppRoot(resumeTick: Int) {
                 TextButton(onClick = { loginNotice = null }) { Text("OK") }
             }
         }
-        if (dest == Destination.Home) {
-            HomeHeader(
-                onOpenMap = { go(Destination.WorldMap) },
-                onOpenItems = { go(Destination.Items) },
-                onOpenFriends = { go(Destination.Friends) },
-                onOpenDex = { go(Destination.Dex) },
-                onOpenSettings = { go(Destination.Settings) },
-                onOpenDev = { go(Destination.Dev) },
-            )
-        } else {
+        if (dest != Destination.Home) {
             ScreenTopBar(dest.title(), onBack = { dest.parent?.let { go(it) } })
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (val d = dest) {
-                Destination.Home -> PetDemoScreen(resumeTick = resumeTick)
+                Destination.Home -> HomeScreen(
+                    resumeTick = resumeTick,
+                    onOpenMap = { go(Destination.WorldMap) },
+                    onOpenItems = { go(Destination.Items) },
+                    onOpenFriends = { go(Destination.Friends) },
+                    onOpenDex = { go(Destination.Dex) },
+                    onOpenSettings = { go(Destination.Settings) },
+                    onOpenDev = { go(Destination.Dev) },
+                )
                 Destination.WorldMap -> WorldMapScreen(onSelect = { go(Destination.forLocation(it)) })
                 Destination.GameSelect -> GameSelectScreen(onSelect = { go(Destination.Game(it)) })
                 is Destination.Game -> when (d.game) {
