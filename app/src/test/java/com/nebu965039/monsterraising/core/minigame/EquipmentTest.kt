@@ -33,7 +33,6 @@ class EquipmentTest {
     fun nonEquipmentItems_areNotEquipment() {
         assertFalse(Equipment.isEquipment(ItemType.RICE))
         assertFalse(Equipment.isEquipment(ItemType.ELIXIR))
-        assertNull(Equipment.slotOf(ItemType.MINIGAME_TICKET))
     }
 
     @Test
@@ -43,7 +42,7 @@ class EquipmentTest {
         assertEquals("満腹度の減少速度 -2.5%、清潔度の減少速度 -2.5%", Equipment.describe(ItemType.EQUIP_BALANCE_CARE))
     }
 
-    // --- 装着 ---
+    // --- 装着(装着できるのは常に 1 つ。8.4.1節) ---
 
     @Test
     fun equip_requiresOwnership() {
@@ -53,26 +52,27 @@ class EquipmentTest {
     }
 
     @Test
-    fun equipping_replacesTheItemInTheSameSlot() {
+    fun equippingAnotherItem_replacesTheCurrentOne() {
         val inv = owning(ItemType.EQUIP_STRENGTH, ItemType.EQUIP_INTELLECT)
             .equip(ItemType.EQUIP_STRENGTH)!!.equip(ItemType.EQUIP_INTELLECT)!!
-        assertEquals(listOf(ItemType.EQUIP_INTELLECT), inv.equippedItems())
+        assertEquals(ItemType.EQUIP_INTELLECT, inv.equippedItem())
+        assertFalse(inv.isEquipped(ItemType.EQUIP_STRENGTH))
     }
 
     @Test
-    fun differentSlots_canBeWornTogether() {
+    fun onlyOneItemCanBeEquippedAtATime() {
         val inv = owning(ItemType.EQUIP_STRENGTH, ItemType.EQUIP_SATIETY)
             .equip(ItemType.EQUIP_STRENGTH)!!.equip(ItemType.EQUIP_SATIETY)!!
-        assertEquals(2, inv.equippedItems().size)
+        assertEquals(ItemType.EQUIP_SATIETY, inv.equippedItem())
         val e = inv.equipEffect()
-        assertEquals(0.05, e.strengthGain, 1e-9)
+        assertEquals(0.0, e.strengthGain, 1e-9)
         assertEquals(0.05, e.satietyDecayCut, 1e-9)
     }
 
     @Test
     fun unequip_removesTheEffect() {
         val inv = owning(ItemType.EQUIP_STRENGTH).equip(ItemType.EQUIP_STRENGTH)!!.unequip(ItemType.EQUIP_STRENGTH)
-        assertTrue(inv.equippedItems().isEmpty())
+        assertNull(inv.equippedItem())
         assertEquals(EquipEffect(), inv.equipEffect())
     }
 
@@ -88,7 +88,7 @@ class EquipmentTest {
     @Test
     fun oldSavedData_withoutEquippedField_stillLoads() {
         val p = MiniGameProgressCodec.decode("""{"inventory":{"explorationPoints":5}}""")!!
-        assertTrue(p.inventory.equippedItems().isEmpty())
+        assertNull(p.inventory.equippedItem())
     }
 
     // --- 有効度の増加への上乗せ ---
@@ -165,9 +165,8 @@ class EquipmentTest {
 
     @Test
     fun anEquippedItemThatIsNoLongerOwned_hasNoEffect() {
-        val inv = Inventory(equipped = setOf(ItemType.EQUIP_STRENGTH.name))
-        assertTrue(inv.equippedItems().isEmpty())
+        val inv = Inventory(equipped = ItemType.EQUIP_STRENGTH.name)
+        assertNull(inv.equippedItem())
         assertEquals(EquipEffect(), inv.equipEffect())
     }
-
 }

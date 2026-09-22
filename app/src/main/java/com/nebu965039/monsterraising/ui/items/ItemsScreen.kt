@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.nebu965039.monsterraising.core.minigame.Elixir
 import com.nebu965039.monsterraising.core.minigame.ElixirUse
-import com.nebu965039.monsterraising.core.minigame.EquipSlot
 import com.nebu965039.monsterraising.core.minigame.Equipment
 import com.nebu965039.monsterraising.core.minigame.ItemType
 import com.nebu965039.monsterraising.core.pet.PetSimulator
@@ -129,19 +128,16 @@ fun ItemsScreen() {
 
         Text("装備", style = MaterialTheme.typography.titleMedium)
         Text(
-            "装備は使っても減りません。「有効度」の枠と「お世話」の枠に、それぞれ 1 つずつ装着できます。",
+            "装備は使っても減りません。装着できるのは常に 1 つです。",
             style = MaterialTheme.typography.bodySmall,
         )
-        for (slot in EquipSlot.entries) {
-            Text(if (slot == EquipSlot.EFFECT) "有効度の枠" else "お世話の枠", style = MaterialTheme.typography.labelLarge)
-            for (item in Equipment.all().filter { Equipment.slotOf(it) == slot }) {
-                EquipmentCard(
-                    item = item,
-                    owned = inventory.count(item),
-                    worn = inventory.isEquipped(item),
-                    onToggle = { changeEquipment { inv -> if (inv.isEquipped(item)) inv.unequip(item) else inv.equip(item) } },
-                )
-            }
+        for (item in Equipment.all()) {
+            EquipmentCard(
+                item = item,
+                owned = inventory.count(item),
+                worn = inventory.isEquipped(item),
+                onToggle = { changeEquipment { inv -> if (inv.isEquipped(item)) inv.unequip(item) else inv.equip(item) } },
+            )
         }
         Text("入手:ミニゲームの上級の初回クリア、または探索(8.4節)", style = MaterialTheme.typography.bodySmall)
     }

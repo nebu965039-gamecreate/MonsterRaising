@@ -29,29 +29,27 @@ data class Inventory(
     val explorationPoints: Int = 0,
     /** アイテム名 → 個数(列挙名をキーにして保存する) */
     val items: Map<String, Int> = emptyMap(),
-    /** 装着中の装備(列挙名)。装備は消費せず、所持している間だけ装着できる。枠ごとに 1 つ([Equipment]) */
-    val equipped: Set<String> = emptySet(),
+    /** 装着中の装備(列挙名)。装備は消費せず、所持している間だけ装着できる。装着枠は 1 つ([Equipment]) */
+    val equipped: String? = null,
 ) {
     fun count(item: ItemType): Int = items[item.name] ?: 0
 
-    /** 装着中の装備。所持していないものは含めない */
-    fun equippedItems(): List<ItemType> =
-        Equipment.all().filter { it.name in equipped && count(it) > 0 }
+    /** 装着中の装備。所持していない(手放した)場合は装着なし扱い */
+    fun equippedItem(): ItemType? = equipped?.let { name -> Equipment.all().find { it.name == name } }?.takeIf { count(it) > 0 }
 
-    fun isEquipped(item: ItemType): Boolean = item in equippedItems()
+    fun isEquipped(item: ItemType): Boolean = item == equippedItem()
 
-    /** 装着中の装備の効果の合計 */
-    fun equipEffect(): EquipEffect = Equipment.effectOf(equippedItems())
+    /** 装着中の装備の効果 */
+    fun equipEffect(): EquipEffect = equippedItem()?.let { Equipment.effectOf(it) } ?: EquipEffect()
 
-    /** [item] を装着する。同じ枠で装着中のものは外れる。装備でない・所持していなければ null */
+    /** [item] を装着する(装着中のものと入れ替わる)。装備でない・所持していなければ null */
     fun equip(item: ItemType): Inventory? {
-        val slot = Equipment.slotOf(item) ?: return null
+        if (!Equipment.isEquipment(item)) return null
         if (count(item) <= 0) return null
-        val kept = equipped.filter { name -> Equipment.all().none { it.name == name && Equipment.slotOf(it) == slot } }
-        return copy(equipped = kept.toSet() + item.name)
+        return copy(equipped = item.name)
     }
 
-    fun unequip(item: ItemType): Inventory = copy(equipped = equipped - item.name)
+    fun unequip(item: ItemType): Inventory = if (equipped == item.name) copy(equipped = null) else this
 
     fun add(item: ItemType, amount: Int): Inventory {
         require(amount >= 0)
