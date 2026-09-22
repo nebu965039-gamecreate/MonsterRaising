@@ -44,7 +44,7 @@ fun HomeHeader(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("森", style = MaterialTheme.typography.titleMedium)
+            Text("廃屋", style = MaterialTheme.typography.titleMedium)
             Text("  ☀", fontSize = 20.sp)
         }
         Box {

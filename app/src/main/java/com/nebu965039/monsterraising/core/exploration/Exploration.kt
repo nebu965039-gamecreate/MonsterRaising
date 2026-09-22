@@ -5,7 +5,10 @@ import com.nebu965039.monsterraising.core.minigame.MiniGameProgress
 import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
-/** 探索拠点(基本設計書8.1節): 初期リリースは洞窟・海岸・山の 3 か所。 */
+/**
+ * 探索拠点(基本設計書8.1節): 初期リリースは洞窟・海岸・森の 3 か所。
+ * 列挙名 [MOUNTAIN] は「森」に改名する前の名残(保存データのキー・テストとの互換のため、識別子はそのまま残す)。
+ */
 enum class ExplorationSite(
     val displayName: String,
     /** 拠点画面に表示する導入の文章 */
@@ -15,7 +18,7 @@ enum class ExplorationSite(
 ) {
     CAVE("洞窟", "暗くて巨大な洞窟があります。", ItemType.EQUIP_BALANCE_CARE),
     COAST("海岸", "潮の香りのする、広い海岸があります。", ItemType.EQUIP_CLEANLINESS),
-    MOUNTAIN("山", "深い緑に覆われた、険しい山があります。", ItemType.EQUIP_SATIETY),
+    MOUNTAIN("森", "緑深く、静かで少し不思議な森があります。", ItemType.EQUIP_SATIETY),
 }
 
 /** 探索の種類(8.2節): 1 回(少し探索)と、10 連(じっくり探索)。 */

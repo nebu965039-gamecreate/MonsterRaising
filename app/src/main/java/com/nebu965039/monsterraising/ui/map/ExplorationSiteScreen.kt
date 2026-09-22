@@ -33,11 +33,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -171,6 +174,10 @@ private fun SiteView(
     val sprite by produceState<LoadedSprite?>(null) {
         value = withContext(Dispatchers.IO) { SpriteAssets.load(context, "fox") }
     }
+    // 拠点の背景画像(任意。用意されていなければグラデーションの仮表示のまま)
+    val background by produceState<ImageBitmap?>(null, site) {
+        value = withContext(Dispatchers.IO) { SiteBackgrounds.load(context, site) }
+    }
     var step by remember(site) { mutableStateOf(SiteStep.INTRO) }
     var departing by remember(site) { mutableStateOf(false) }
     var collected by remember(site) { mutableStateOf<Map<ItemType, Int>?>(null) }
@@ -191,7 +198,14 @@ private fun SiteView(
     val used = progress.exploration.actives.size
     val hasFreeSlot = used < capacity
 
-    Box(Modifier.fillMaxSize().background(site.background())) {
+    Box(Modifier.fillMaxSize()) {
+        // 背景画像(設計書10.3.0節: 高さ基準で拡大し、幅は中央基準でトリミング)。未配置なら色のグラデーションで仮表示する
+        val bg = background
+        if (bg != null) {
+            Image(bg, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+        } else {
+            Box(Modifier.matchParentSize().background(site.background()))
+        }
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(site.displayName, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
 
