@@ -37,6 +37,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -202,7 +203,13 @@ private fun SiteView(
         // 背景画像(設計書10.3.0節: 高さ基準で拡大し、幅は中央基準でトリミング)。未配置なら色のグラデーションで仮表示する
         val bg = background
         if (bg != null) {
-            Image(bg, contentDescription = null, modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+            Image(
+                bg,
+                contentDescription = null,
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.None,
+            )
         } else {
             Box(Modifier.matchParentSize().background(site.background()))
         }
