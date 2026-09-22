@@ -13,7 +13,7 @@ enum class ItemType {
     /** 超レア: 長寿の秘薬(4.5節) */
     ELIXIR,
 
-    // かなりレア: 装備アイテム 6 種(8.4節)。効果の計算は未実装
+    // かなりレア: 装備アイテム 6 種(8.4節)。効果は [Equipment]
     EQUIP_STRENGTH,
     EQUIP_INTELLECT,
     EQUIP_SATIETY,
@@ -29,8 +29,27 @@ data class Inventory(
     val explorationPoints: Int = 0,
     /** アイテム名 → 個数(列挙名をキーにして保存する) */
     val items: Map<String, Int> = emptyMap(),
+    /** 装着中の装備(列挙名)。装備は消費せず、所持している間だけ装着できる。装着枠は 1 つ([Equipment]) */
+    val equipped: String? = null,
 ) {
     fun count(item: ItemType): Int = items[item.name] ?: 0
+
+    /** 装着中の装備。所持していない(手放した)場合は装着なし扱い */
+    fun equippedItem(): ItemType? = equipped?.let { name -> Equipment.all().find { it.name == name } }?.takeIf { count(it) > 0 }
+
+    fun isEquipped(item: ItemType): Boolean = item == equippedItem()
+
+    /** 装着中の装備の効果 */
+    fun equipEffect(): EquipEffect = equippedItem()?.let { Equipment.effectOf(it) } ?: EquipEffect()
+
+    /** [item] を装着する(装着中のものと入れ替わる)。装備でない・所持していなければ null */
+    fun equip(item: ItemType): Inventory? {
+        if (!Equipment.isEquipment(item)) return null
+        if (count(item) <= 0) return null
+        return copy(equipped = item.name)
+    }
+
+    fun unequip(item: ItemType): Inventory = if (equipped == item.name) copy(equipped = null) else this
 
     fun add(item: ItemType, amount: Int): Inventory {
         require(amount >= 0)

@@ -28,6 +28,9 @@ sealed interface Destination {
     /** フレンド画面(9節) */
     data object Friends : Destination
 
+    /** 持ち物画面(10.2.5節): 持ち物の一覧、装備の装着、長寿の秘薬の使用 */
+    data object Items : Destination
+
     /** 設定画面(10.1節) */
     data object Settings : Destination
 
@@ -42,7 +45,7 @@ sealed interface Destination {
             GameSelect -> WorldMap
             is Game -> GameSelect
             is Site -> WorldMap
-            Dex, Friends, Settings, Dev -> Home
+            Dex, Friends, Items, Settings, Dev -> Home
         }
 
     /** 保存用の文字列 */
@@ -55,6 +58,7 @@ sealed interface Destination {
             is Site -> "site:${site.name}"
             Dex -> "dex"
             Friends -> "friends"
+            Items -> "items"
             Settings -> "settings"
             Dev -> "dev"
         }
@@ -68,6 +72,7 @@ sealed interface Destination {
             key == "dev" -> Dev
             key == "dex" -> Dex
             key == "friends" -> Friends
+            key == "items" -> Items
             key == "settings" -> Settings
             key.startsWith("game:") -> runCatching { Game(MiniGame.valueOf(key.removePrefix("game:"))) }.getOrNull()
             key.startsWith("site:") -> runCatching { Site(ExplorationSite.valueOf(key.removePrefix("site:"))) }.getOrNull()

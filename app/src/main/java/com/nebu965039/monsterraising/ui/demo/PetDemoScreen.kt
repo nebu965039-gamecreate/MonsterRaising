@@ -51,6 +51,7 @@ import com.nebu965039.monsterraising.core.pet.Stage
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
+import com.nebu965039.monsterraising.data.careConfig
 import com.nebu965039.monsterraising.ui.care.CareStage
 import com.nebu965039.monsterraising.ui.common.label
 import com.nebu965039.monsterraising.widget.PetWidgetUpdater
@@ -60,8 +61,6 @@ import com.nebu965039.monsterraising.ui.sprite.SpritePlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-
-private val config = PetConfig()
 
 private const val HOUR_MS = 3_600_000L
 
@@ -80,6 +79,8 @@ private const val DAY_MS = 24 * HOUR_MS
 fun PetDemoScreen(characterId: String = "fox", resumeTick: Int = 0) {
     val context = LocalContext.current
     val store = remember { PetStore(context) }
+    // 装着中の装備(満腹度・清潔度の減少速度)を反映した調整値。装備は持ち物画面で変えるので、この画面を開くたびに読み直す
+    val config = remember { careConfig(context) }
     val sprite by produceState<LoadedSprite?>(null, characterId) {
         value = withContext(Dispatchers.IO) { SpriteAssets.load(context, characterId) }
     }
