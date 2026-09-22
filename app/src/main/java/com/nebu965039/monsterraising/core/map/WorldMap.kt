@@ -6,7 +6,10 @@ import com.nebu965039.monsterraising.core.exploration.ExplorationSite
 /** 拠点の種類(基本設計書10.4節): 自宅・ゲーム拠点・探索拠点。 */
 enum class LocationKind { HOME, GAME_BASE, EXPLORATION }
 
-/** ワールドマップ上の拠点の識別子。将来、拠点を追加するときはここに足す(10.4節)。 */
+/**
+ * ワールドマップ上の拠点の識別子。将来、拠点を追加するときはここに足す(10.4節)。
+ * [MOUNTAIN] は「森」に改名する前の名残(識別子はそのまま残す)。
+ */
 enum class MapLocationId { HOME, GAME_BASE, CAVE, COAST, MOUNTAIN }
 
 /**
@@ -33,12 +36,12 @@ object WorldMap {
     /** すべての拠点。今は全部解放済み。将来の拠点追加や、解放条件のある拠点は [locations] の引数で制御する */
     val allIds: Set<MapLocationId> = MapLocationId.entries.toSet()
 
-    /** 拠点の定義(名称・アイコン・位置)。名称は、メイン画面の背景の拠点(森・廃屋など。10.3節)と重複しないようにする */
+    /** 拠点の定義(名称・アイコン・位置)。名称は、メイン画面の背景の拠点(廃屋など。10.3節)と重複しないようにする */
     private val definitions: List<MapLocation> = listOf(
         MapLocation(MapLocationId.HOME, "自宅", LocationKind.HOME, "🏠", 0.28f, 0.72f, true),
         MapLocation(MapLocationId.GAME_BASE, "ゲーム拠点", LocationKind.GAME_BASE, "🎮", 0.74f, 0.70f, true),
         MapLocation(MapLocationId.CAVE, ExplorationSite.CAVE.displayName, LocationKind.EXPLORATION, "🕳️", 0.20f, 0.26f, true, ExplorationSite.CAVE),
-        MapLocation(MapLocationId.MOUNTAIN, ExplorationSite.MOUNTAIN.displayName, LocationKind.EXPLORATION, "⛰️", 0.50f, 0.12f, true, ExplorationSite.MOUNTAIN),
+        MapLocation(MapLocationId.MOUNTAIN, ExplorationSite.MOUNTAIN.displayName, LocationKind.EXPLORATION, "🌲", 0.50f, 0.12f, true, ExplorationSite.MOUNTAIN),
         MapLocation(MapLocationId.COAST, ExplorationSite.COAST.displayName, LocationKind.EXPLORATION, "🏖️", 0.80f, 0.30f, true, ExplorationSite.COAST),
     )
 
