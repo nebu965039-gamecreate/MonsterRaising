@@ -220,14 +220,15 @@ fun HomeScreen(
                     statusBar = {
                         if (!isEgg) StatusBar(pet.stats.satiety, pet.stats.cleanliness, pet.stats.mood)
                     },
-                ) { scale, widthPx ->
+                ) { scale, widthPx, walking, facingLeft ->
                     val arriving = exploring && comeBack.value > 0f
-                    // 戻ってくる間は、左向き(進行方向)にして歩く
-                    Box(Modifier.graphicsLayer { translationX = comeBack.value * widthPx; scaleX = if (arriving) -1f else 1f }) {
+                    // 戻ってくる間・歩き回っている間は walk アニメーション。向きは進行方向(左向きが -1)に合わせる
+                    val flipped = arriving || (walking && facingLeft)
+                    Box(Modifier.graphicsLayer { translationX = comeBack.value * widthPx; scaleX = if (flipped) -1f else 1f }) {
                         key(shotToken) {
                             SpritePlayer(
                                 loaded,
-                                animation = if (arriving) "walk" else (oneShot ?: base),
+                                animation = oneShot ?: if (arriving || walking) "walk" else base,
                                 scale = scale,
                                 onFrameChanged = { if (oneShot != null && it.animation == "idle") oneShot = null },
                             )

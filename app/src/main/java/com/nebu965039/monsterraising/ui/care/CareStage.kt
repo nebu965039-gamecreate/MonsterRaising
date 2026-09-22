@@ -3,6 +3,7 @@ package com.nebu965039.monsterraising.ui.care
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -44,6 +46,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,12 +55,21 @@ import com.nebu965039.monsterraising.core.care.StainField
 import com.nebu965039.monsterraising.core.sprite.SpriteTimeline
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.random.Random
 
 private const val SPRITE_SOURCE_SIZE = 48
 private val STAIN_COLOR = Color(0xFF6B4A2B)
 private val PANEL_BG = Color(0xF0FFFFFF)
 private val PACK_COLOR = Color(0xFFD9683A)
 private val TEXT_DARK = Color(0xFF3A2A1C)
+
+// 歩き回る動作(designの相談: 横は舞台の幅いっぱい、縦は接地位置から上下24dp程度の「奥行き」ぶんだけ動かす)
+private val WANDER_VERTICAL_RANGE = 24.dp
+private const val WANDER_SPEED_DP_PER_SEC = 40f
+private const val WANDER_PAUSE_MIN_MS = 3_000L
+private const val WANDER_PAUSE_MAX_MS = 9_000L
 
 /**
  * メイン画面の中心となる「舞台」(基本設計書10.2節。メイン画面ワイヤーフレームに準拠)。
@@ -68,10 +80,13 @@ private val TEXT_DARK = Color(0xFF3A2A1C)
  * どちらもアプリ限定の操作で、ウィジェットは単純タップのボタンのまま。
  * 下部には[statusBar]([呼び出し側が満腹度・清潔度・機嫌のゲージを渡す)とリュック(FAB)を横並びに配置する。
  *
+ * 何もしていない間は、舞台の中を歩き回る(横は舞台の幅いっぱい、縦は接地位置から上下[WANDER_VERTICAL_RANGE])。
+ *
  * @param friendVisiting 遊びに来ているフレンドがいれば、その表示文言(いなければ null。9節・10.2節)
  * @param onStainCleaned 汚れ 1 箇所が消えたときに呼ぶ。清潔度を上げ、上がったあとの清潔度を返す
  * @param statusBar 満腹度・清潔度・機嫌のゲージ(呼び出し側が[SegmentedGauge]等で組み立てる)
- * @param characterContent キャラクターの描画。[scale] はスプライトの整数倍率、[widthPx] は舞台の幅(画面外から戻ってくる演出用)
+ * @param characterContent キャラクターの描画。[scale] はスプライトの整数倍率、[widthPx] は舞台の幅(画面外から戻ってくる演出用)、
+ * [walking] は歩き回り中か(呼び出し側で walk アニメーションに切り替えるのに使う)、[facingLeft] は歩いている向き
  */
 @Composable
 fun CareStage(
@@ -85,7 +100,7 @@ fun CareStage(
     modifier: Modifier = Modifier,
     friendVisiting: String? = null,
     statusBar: @Composable () -> Unit = {},
-    characterContent: @Composable (scale: Int, widthPx: Float) -> Unit,
+    characterContent: @Composable (scale: Int, widthPx: Float, walking: Boolean, facingLeft: Boolean) -> Unit,
 ) {
     var cleaning by remember { mutableStateOf(false) }
     var packOpen by remember { mutableStateOf(false) }
@@ -164,6 +179,32 @@ fun CareStage(
         val widthPx = with(density) { maxWidth.toPx() }
         val scale = SpriteTimeline.integerScale(with(density) { (maxWidth * 0.45f).roundToPx() }, SPRITE_SOURCE_SIZE)
 
+        // 歩き回る動作: 何もしていない間、ランダムな間隔で舞台の中の別の場所へ歩く(横は舞台の幅いっぱい、縦は上下 WANDER_VERTICAL_RANGE)
+        val wanderX = remember { Animatable(0f) }
+        val wanderY = remember { Animatable(0f) }
+        var walking by remember { mutableStateOf(false) }
+        var facingLeft by remember { mutableStateOf(false) }
+        LaunchedEffect(isEgg, stageSize, scale) {
+            if (isEgg || stageSize.width <= 0) return@LaunchedEffect
+            val halfCharacterPx = scale * SPRITE_SOURCE_SIZE / 2f
+            val marginPx = halfCharacterPx + with(density) { 8.dp.toPx() }
+            val maxX = (stageSize.width / 2f - marginPx).coerceAtLeast(0f)
+            val verticalRangePx = with(density) { WANDER_VERTICAL_RANGE.toPx() }
+            val speedPxPerSec = WANDER_SPEED_DP_PER_SEC * density.density
+            while (true) {
+                delay(Random.nextLong(WANDER_PAUSE_MIN_MS, WANDER_PAUSE_MAX_MS))
+                if (cleaning) continue // 掃除中は歩き回らない(次のループでまた条件を見る)
+                val targetX = if (maxX > 0f) Random.nextFloat() * 2f * maxX - maxX else 0f
+                val targetY = if (verticalRangePx > 0f) Random.nextFloat() * 2f * verticalRangePx - verticalRangePx else 0f
+                facingLeft = targetX < wanderX.value
+                walking = true
+                val durationMs = (abs(targetX - wanderX.value) / speedPxPerSec * 1000).toInt().coerceIn(400, 3_000)
+                launch { wanderY.animateTo(targetY, tween(durationMs)) }
+                wanderX.animateTo(targetX, tween(durationMs))
+                walking = false
+            }
+        }
+
         // 背景の汚れ
         Canvas(Modifier.matchParentSize()) {
             if (fieldTick >= 0) {
@@ -194,31 +235,34 @@ fun CareStage(
             }
         }
 
-        // キャラクターと案内文(なでる操作の説明)
-        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier
-                    .onGloballyPositioned { characterBounds = it.boundsInRoot() }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = !cleaning && !isEgg,
-                    ) {
-                        onPetNow()
-                        message = "♥"
-                    },
-            ) {
-                characterContent(scale, widthPx)
-            }
-            if (!isEgg && !cleaning) {
-                Text(
-                    "キャラクターに直接タッチしてなでられます",
-                    Modifier.padding(top = 4.dp),
-                    color = Color(0xFF3C2814).copy(alpha = 0.75f),
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
+        // キャラクター本体。歩き回り中は wanderX/wanderY ぶんだけ定位置からずれる
+        // (案内文はここに含めない: 追従させると、画面端まで歩いたときにはみ出るため)
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .offset { IntOffset(wanderX.value.roundToInt(), wanderY.value.roundToInt()) }
+                .onGloballyPositioned { characterBounds = it.boundsInRoot() }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = !cleaning && !isEgg,
+                ) {
+                    onPetNow()
+                    message = "♥"
+                },
+        ) {
+            characterContent(scale, widthPx, walking, facingLeft)
+        }
+        // なでる操作の案内文。キャラクターには追従させず、定位置(キャラクターの実際の高さの下)に表示する
+        if (!isEgg && !cleaning) {
+            val characterHeightDp = with(density) { (scale * SPRITE_SOURCE_SIZE).toDp() }
+            Text(
+                "キャラクターに直接タッチしてなでられます",
+                Modifier.align(Alignment.Center).offset(y = characterHeightDp / 2 + 12.dp),
+                color = Color(0xFF3C2814).copy(alpha = 0.75f),
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
 
         message?.let {
