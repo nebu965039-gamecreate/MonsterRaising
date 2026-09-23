@@ -38,7 +38,6 @@ import com.nebu965039.monsterraising.ui.dex.DexScreen
 import com.nebu965039.monsterraising.ui.friends.FriendsScreen
 import com.nebu965039.monsterraising.ui.home.HomeScreen
 import com.nebu965039.monsterraising.ui.settings.SettingsScreen
-import com.nebu965039.monsterraising.ui.game.GameSelectScreen
 import com.nebu965039.monsterraising.ui.items.ItemsScreen
 import com.nebu965039.monsterraising.ui.game.title
 import com.nebu965039.monsterraising.ui.map.ExplorationSiteScreen
@@ -51,7 +50,6 @@ import kotlinx.coroutines.delay
 private fun Destination.title(): String = when (this) {
     Destination.Home -> ""
     Destination.WorldMap -> "ワールドマップ"
-    Destination.GameSelect -> "ゲーム拠点"
     is Destination.Game -> game.title()
     is Destination.Site -> site.displayName
     Destination.Dex -> "図鑑"
@@ -130,7 +128,6 @@ fun AppRoot(resumeTick: Int) {
                     onOpenDev = { go(Destination.Dev) },
                 )
                 Destination.WorldMap -> WorldMapScreen(onSelect = { go(Destination.forLocation(it)) })
-                Destination.GameSelect -> GameSelectScreen(onSelect = { go(Destination.Game(it)) })
                 is Destination.Game -> when (d.game) {
                     MiniGame.PUZZLE -> PuzzleScreen()
                     MiniGame.CARD -> CardScreen()

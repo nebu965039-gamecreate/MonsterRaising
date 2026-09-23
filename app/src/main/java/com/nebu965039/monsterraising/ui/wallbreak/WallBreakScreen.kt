@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
@@ -74,6 +75,9 @@ import com.nebu965039.monsterraising.minigame.wallbreak.WallBreakGame
 import com.nebu965039.monsterraising.minigame.wallbreak.WallBreakResult
 import com.nebu965039.monsterraising.minigame.wallbreak.WallColor
 import com.nebu965039.monsterraising.minigame.wallbreak.WallDifficulty
+import com.nebu965039.monsterraising.ui.common.BackgroundImages
+import com.nebu965039.monsterraising.ui.common.GAME_CENTER_BACKGROUND_PATH
+import com.nebu965039.monsterraising.ui.common.ScreenBackground
 import com.nebu965039.monsterraising.ui.demo.DemoClock
 import com.nebu965039.monsterraising.ui.minigame.PlayLimitPanel
 import com.nebu965039.monsterraising.ui.minigame.rewardsText
@@ -178,6 +182,11 @@ fun WallBreakScreen() {
         PetWidgetUpdater.updateAll(context)
     }
 
+    // ゲームセンターの背景(任意。3本のミニゲーム共通。8.1節)。開始前の画面にだけ敷く
+    val gameCenterBg by produceState<ImageBitmap?>(null) {
+        value = withContext(Dispatchers.IO) { BackgroundImages.load(context, GAME_CENTER_BACKGROUND_PATH) }
+    }
+
     val current = game
     val done = summary
     when {
@@ -193,10 +202,11 @@ fun WallBreakScreen() {
             },
             onMenu = { summary = null; game = null },
         )
-        else -> Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        else -> ScreenBackground(gameCenterBg, scrimAlpha = 0.82f) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Text("壁破りゲーム", style = MaterialTheme.typography.titleLarge)
             Text(
                 "制限時間 60 秒。色名の単語が、意味とは違う色の文字で表示されます。" +
@@ -237,6 +247,7 @@ fun WallBreakScreen() {
                     progress = progressStore.load()
                 },
             )
+            }
         }
     }
 }

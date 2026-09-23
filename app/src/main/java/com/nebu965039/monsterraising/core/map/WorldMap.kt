@@ -9,8 +9,9 @@ enum class LocationKind { HOME, GAME_BASE, EXPLORATION }
 /**
  * ワールドマップ上の拠点の識別子。将来、拠点を追加するときはここに足す(10.4節)。
  * [MOUNTAIN] は「森」に改名する前の名残(識別子はそのまま残す)。
+ * ゲーム拠点は、ミニゲーム1本につき1つの建物として地図上に3つ分ける(8.1節・確定 2026-09-23)。
  */
-enum class MapLocationId { HOME, GAME_BASE, CAVE, COAST, MOUNTAIN }
+enum class MapLocationId { HOME, GAME_PUZZLE, GAME_CARD, GAME_WALLBREAK, CAVE, COAST, MOUNTAIN }
 
 /**
  * ワールドマップ上の拠点 1 つ。[x]・[y] は地図の左上を (0,0)、右下を (1,1) としたアイコンの中心位置。
@@ -36,10 +37,15 @@ object WorldMap {
     /** すべての拠点。今は全部解放済み。将来の拠点追加や、解放条件のある拠点は [locations] の引数で制御する */
     val allIds: Set<MapLocationId> = MapLocationId.entries.toSet()
 
-    /** 拠点の定義(名称・アイコン・位置)。名称は、メイン画面の背景の拠点(廃屋など。10.3節)と重複しないようにする */
+    /**
+     * 拠点の定義(名称・アイコン・位置)。名称は、メイン画面の背景の拠点(廃屋など。10.3節)と重複しないようにする。
+     * ゲーム拠点はミニゲーム1本につき1つの建物として、3つに分けて配置する(8.1節・確定 2026-09-23)。
+     */
     private val definitions: List<MapLocation> = listOf(
         MapLocation(MapLocationId.HOME, "自宅", LocationKind.HOME, "🏠", 0.28f, 0.72f, true),
-        MapLocation(MapLocationId.GAME_BASE, "ゲーム拠点", LocationKind.GAME_BASE, "🎮", 0.74f, 0.70f, true),
+        MapLocation(MapLocationId.GAME_PUZZLE, "落ち物パズル", LocationKind.GAME_BASE, "🎮", 0.62f, 0.50f, true),
+        MapLocation(MapLocationId.GAME_CARD, "カード × NPC 戦", LocationKind.GAME_BASE, "🎮", 0.86f, 0.52f, true),
+        MapLocation(MapLocationId.GAME_WALLBREAK, "壁破りゲーム", LocationKind.GAME_BASE, "🎮", 0.76f, 0.82f, true),
         MapLocation(MapLocationId.CAVE, ExplorationSite.CAVE.displayName, LocationKind.EXPLORATION, "🕳️", 0.20f, 0.26f, true, ExplorationSite.CAVE),
         MapLocation(MapLocationId.MOUNTAIN, ExplorationSite.MOUNTAIN.displayName, LocationKind.EXPLORATION, "🌲", 0.50f, 0.12f, true, ExplorationSite.MOUNTAIN),
         MapLocation(MapLocationId.COAST, ExplorationSite.COAST.displayName, LocationKind.EXPLORATION, "🏖️", 0.80f, 0.30f, true, ExplorationSite.COAST),
