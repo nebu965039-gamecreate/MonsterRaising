@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,8 @@ import com.nebu965039.monsterraising.data.PetStore
 import com.nebu965039.monsterraising.data.careConfig
 import com.nebu965039.monsterraising.ui.care.CareStage
 import com.nebu965039.monsterraising.ui.care.StatusBar
+import com.nebu965039.monsterraising.ui.common.BackgroundImages
+import com.nebu965039.monsterraising.ui.common.ScreenBackground
 import com.nebu965039.monsterraising.ui.demo.DemoClock
 import com.nebu965039.monsterraising.ui.demo.DemoFriends
 import com.nebu965039.monsterraising.ui.nav.HomeHeader
@@ -55,6 +58,8 @@ import com.nebu965039.monsterraising.widget.PetWidgetUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+private const val HOME_BACKGROUND_PATH = "backgrounds/home/home.png"
 
 /** メイン画面の仮の拠点名・天気(背景・天候システム 10.3節ができるまでの仮表示)。 */
 private const val LOCATION_NAME = "廃屋"
@@ -144,10 +149,19 @@ fun HomeScreen(
         shotToken++
     }
 
-    val loaded = sprite
-    Box(Modifier.fillMaxSize().background(BG_GRADIENT)) {
-        LocationBackdrop()
+    // 拠点の背景画像(任意。設計書10.3.0節)。未配置なら図形描画の仮背景にフォールバックする
+    val homeBg by produceState<ImageBitmap?>(null) {
+        value = withContext(Dispatchers.IO) { BackgroundImages.load(context, HOME_BACKGROUND_PATH) }
+    }
 
+    val loaded = sprite
+    ScreenBackground(
+        image = homeBg,
+        fallback = {
+            Box(Modifier.matchParentSize().background(BG_GRADIENT))
+            LocationBackdrop()
+        },
+    ) {
         Column(Modifier.fillMaxSize()) {
             HomeHeader(
                 locationName = LOCATION_NAME,

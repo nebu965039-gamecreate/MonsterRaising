@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -66,12 +68,17 @@ import com.nebu965039.monsterraising.minigame.puzzle.PieceColor
 import com.nebu965039.monsterraising.minigame.puzzle.PieceType
 import com.nebu965039.monsterraising.minigame.puzzle.PuzzleGame
 import com.nebu965039.monsterraising.minigame.puzzle.PuzzleResult
+import com.nebu965039.monsterraising.ui.common.BackgroundImages
+import com.nebu965039.monsterraising.ui.common.GAME_CENTER_BACKGROUND_PATH
+import com.nebu965039.monsterraising.ui.common.ScreenBackground
 import com.nebu965039.monsterraising.ui.demo.DemoClock
 import com.nebu965039.monsterraising.ui.minigame.PlayLimitPanel
 import com.nebu965039.monsterraising.ui.minigame.rewardsText
 import com.nebu965039.monsterraising.widget.PetWidgetUpdater
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** 1 プレイが終わったあとに表示する内容。 */
 private data class PlaySummary(
@@ -143,6 +150,11 @@ fun PuzzleScreen() {
         PetWidgetUpdater.updateAll(context)
     }
 
+    // ゲームセンターの背景(任意。3本のミニゲーム共通。8.1節)。開始前の画面にだけ敷く
+    val gameCenterBg by produceState<ImageBitmap?>(null) {
+        value = withContext(Dispatchers.IO) { BackgroundImages.load(context, GAME_CENTER_BACKGROUND_PATH) }
+    }
+
     val current = game
     val result = summary
     when {
@@ -158,10 +170,11 @@ fun PuzzleScreen() {
             onMenu = { summary = null; game = null },
             canRetry = progress.playStatus(MiniGame.PUZZLE, day()).remaining > 0,
         )
-        else -> Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        else -> ScreenBackground(gameCenterBg, scrimAlpha = 0.82f) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Text("落ち物パズル", style = MaterialTheme.typography.titleLarge)
             Text(
                 "制限時間 90 秒。ブロックを積んでラインを揃えて消し、目標スコアを目指します。" +
@@ -196,6 +209,7 @@ fun PuzzleScreen() {
                     progress = progressStore.load()
                 },
             )
+            }
         }
     }
 }

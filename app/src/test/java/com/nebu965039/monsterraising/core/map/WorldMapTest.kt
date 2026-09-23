@@ -23,11 +23,15 @@ class WorldMapTest {
     // --- 拠点の配置(10.4) ---
 
     @Test
-    fun hasHome_gameBase_andTheThreeExplorationSites() {
+    fun hasHome_theThreeGameBases_andTheThreeExplorationSites() {
         val ids = WorldMap.locations().map { it.id }
         assertEquals(MapLocationId.entries.toSet(), ids.toSet())
-        assertEquals(5, ids.size)
+        assertEquals(7, ids.size)
         assertEquals(setOf(MapLocationId.CAVE, MapLocationId.COAST, MapLocationId.MOUNTAIN), WorldMap.locations().filter { it.kind == LocationKind.EXPLORATION }.map { it.id }.toSet())
+        assertEquals(
+            setOf(MapLocationId.GAME_PUZZLE, MapLocationId.GAME_CARD, MapLocationId.GAME_WALLBREAK),
+            WorldMap.locations().filter { it.kind == LocationKind.GAME_BASE }.map { it.id }.toSet(),
+        )
     }
 
     @Test
@@ -63,7 +67,7 @@ class WorldMapTest {
 
     @Test
     fun locationsOutsideTheUnlockedSetAreLocked() {
-        val locations = WorldMap.locations(unlocked = setOf(MapLocationId.HOME, MapLocationId.GAME_BASE))
+        val locations = WorldMap.locations(unlocked = setOf(MapLocationId.HOME, MapLocationId.GAME_PUZZLE))
         assertTrue(locations.first { it.id == MapLocationId.HOME }.unlocked)
         assertFalse(locations.first { it.id == MapLocationId.CAVE }.unlocked)
         assertEquals(2, locations.count { it.unlocked })
@@ -109,7 +113,9 @@ class WorldMapTest {
     @Test
     fun tappingALocation_opensItsScreen() {
         assertEquals(Destination.Home, Destination.forLocation(MapLocationId.HOME))
-        assertEquals(Destination.GameSelect, Destination.forLocation(MapLocationId.GAME_BASE))
+        assertEquals(Destination.Game(MiniGame.PUZZLE), Destination.forLocation(MapLocationId.GAME_PUZZLE))
+        assertEquals(Destination.Game(MiniGame.CARD), Destination.forLocation(MapLocationId.GAME_CARD))
+        assertEquals(Destination.Game(MiniGame.WALL_BREAK), Destination.forLocation(MapLocationId.GAME_WALLBREAK))
         assertEquals(Destination.Site(ExplorationSite.CAVE), Destination.forLocation(MapLocationId.CAVE))
         assertEquals(Destination.Site(ExplorationSite.COAST), Destination.forLocation(MapLocationId.COAST))
         assertEquals(Destination.Site(ExplorationSite.MOUNTAIN), Destination.forLocation(MapLocationId.MOUNTAIN))
@@ -126,8 +132,7 @@ class WorldMapTest {
     fun back_goesUpTheTree() {
         assertNull(Destination.Home.parent)
         assertEquals(Destination.Home, Destination.WorldMap.parent)
-        assertEquals(Destination.WorldMap, Destination.GameSelect.parent)
-        assertEquals(Destination.GameSelect, Destination.Game(MiniGame.PUZZLE).parent)
+        assertEquals(Destination.WorldMap, Destination.Game(MiniGame.PUZZLE).parent)
         assertEquals(Destination.WorldMap, Destination.Site(ExplorationSite.CAVE).parent)
         assertEquals(Destination.Home, Destination.Dev.parent)
         assertEquals(Destination.Home, Destination.Dex.parent)
@@ -138,7 +143,7 @@ class WorldMapTest {
 
     @Test
     fun repeatedBack_alwaysEndsAtHome() {
-        val all = listOf(Destination.Home, Destination.WorldMap, Destination.GameSelect, Destination.Dex, Destination.Friends, Destination.Items, Destination.Settings, Destination.Dev) +
+        val all = listOf(Destination.Home, Destination.WorldMap, Destination.Dex, Destination.Friends, Destination.Items, Destination.Settings, Destination.Dev) +
             MiniGame.entries.map { Destination.Game(it) } + ExplorationSite.entries.map { Destination.Site(it) }
         for (start in all) {
             var d: Destination = start
@@ -152,7 +157,7 @@ class WorldMapTest {
 
     @Test
     fun keys_roundTrip() {
-        val all = listOf(Destination.Home, Destination.WorldMap, Destination.GameSelect, Destination.Dex, Destination.Friends, Destination.Items, Destination.Settings, Destination.Dev) +
+        val all = listOf(Destination.Home, Destination.WorldMap, Destination.Dex, Destination.Friends, Destination.Items, Destination.Settings, Destination.Dev) +
             MiniGame.entries.map { Destination.Game(it) } + ExplorationSite.entries.map { Destination.Site(it) }
         for (d in all) assertEquals(d, Destination.fromKey(d.key))
         assertEquals(all.size, all.map { it.key }.toSet().size) // キーは重複しない

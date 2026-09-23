@@ -5,7 +5,8 @@ import com.nebu965039.monsterraising.core.minigame.MiniGame
 
 /**
  * アプリの画面(基本設計書10.1節)。メイン画面を起点に、ワールドマップから各拠点の画面へ遷移する。
- * 戻る操作([parent])は、拠点の画面 → ワールドマップ、ゲーム拠点の各ミニゲーム → ゲーム選択 → ワールドマップ → メイン画面の順。
+ * 戻る操作([parent])は、拠点の画面 → ワールドマップ → メイン画面の順。
+ * ゲーム拠点はミニゲーム1本につき1つの建物として地図上に3つあり、それぞれ対応するミニゲーム画面へ直接遷移する(8.1節・確定 2026-09-23)。
  * UI・Android 非依存。画面の状態を保存できるよう、文字列の [key] に変換できる。
  */
 sealed interface Destination {
@@ -13,9 +14,6 @@ sealed interface Destination {
     data object Home : Destination
 
     data object WorldMap : Destination
-
-    /** ゲーム拠点のゲーム選択画面 */
-    data object GameSelect : Destination
 
     data class Game(val game: MiniGame) : Destination
 
@@ -42,8 +40,7 @@ sealed interface Destination {
         get() = when (this) {
             Home -> null
             WorldMap -> Home
-            GameSelect -> WorldMap
-            is Game -> GameSelect
+            is Game -> WorldMap
             is Site -> WorldMap
             Dex, Friends, Items, Settings, Dev -> Home
         }
@@ -53,7 +50,6 @@ sealed interface Destination {
         get() = when (this) {
             Home -> "home"
             WorldMap -> "map"
-            GameSelect -> "games"
             is Game -> "game:${game.name}"
             is Site -> "site:${site.name}"
             Dex -> "dex"
@@ -68,7 +64,6 @@ sealed interface Destination {
         fun fromKey(key: String): Destination? = when {
             key == "home" -> Home
             key == "map" -> WorldMap
-            key == "games" -> GameSelect
             key == "dev" -> Dev
             key == "dex" -> Dex
             key == "friends" -> Friends
@@ -79,10 +74,12 @@ sealed interface Destination {
             else -> null
         }
 
-        /** ワールドマップで拠点を選んだときに移る画面(10.4節: 拠点に対応する画面へ遷移する) */
+        /** ワールドマップで拠点を選んだときに移る画面(10.4節: 拠点に対応する画面へ遷移する)。ゲーム拠点は対応するミニゲームへ直接 */
         fun forLocation(id: MapLocationId): Destination = when (id) {
             MapLocationId.HOME -> Home
-            MapLocationId.GAME_BASE -> GameSelect
+            MapLocationId.GAME_PUZZLE -> Game(MiniGame.PUZZLE)
+            MapLocationId.GAME_CARD -> Game(MiniGame.CARD)
+            MapLocationId.GAME_WALLBREAK -> Game(MiniGame.WALL_BREAK)
             MapLocationId.CAVE -> Site(ExplorationSite.CAVE)
             MapLocationId.COAST -> Site(ExplorationSite.COAST)
             MapLocationId.MOUNTAIN -> Site(ExplorationSite.MOUNTAIN)

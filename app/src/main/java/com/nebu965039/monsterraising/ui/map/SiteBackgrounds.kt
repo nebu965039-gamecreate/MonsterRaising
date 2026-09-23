@@ -1,11 +1,9 @@
 package com.nebu965039.monsterraising.ui.map
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import com.nebu965039.monsterraising.core.exploration.ExplorationSite
-import java.io.IOException
+import com.nebu965039.monsterraising.ui.common.BackgroundImages
 
 /**
  * 探索拠点の背景画像(任意。設計書10.3.0節)。`assets/backgrounds/sites/<拠点の小文字>.png`
@@ -17,9 +15,5 @@ object SiteBackgrounds {
 
     fun fileName(site: ExplorationSite): String = "${site.name.lowercase()}.png"
 
-    fun load(context: Context, site: ExplorationSite): ImageBitmap? = try {
-        context.assets.open("$DIR/${fileName(site)}").use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
-    } catch (_: IOException) {
-        null
-    }
+    fun load(context: Context, site: ExplorationSite): ImageBitmap? = BackgroundImages.load(context, "$DIR/${fileName(site)}")
 }

@@ -263,18 +263,34 @@ private fun LocationGlyph(id: MapLocationId, color: Color) {
                 drawPath(roof, color, style = stroke)
                 drawRect(color, topLeft = Offset(w * 0.22f, h * 0.42f), size = androidx.compose.ui.geometry.Size(w * 0.56f, h * 0.46f), style = stroke)
             }
-            MapLocationId.GAME_BASE -> {
-                drawRoundRect(
-                    color,
-                    topLeft = Offset(w * 0.06f, h * 0.32f),
-                    size = androidx.compose.ui.geometry.Size(w * 0.88f, h * 0.44f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.18f),
-                    style = stroke,
+            MapLocationId.GAME_PUZZLE -> {
+                // 落ち物パズル: 積み木(テトロミノ風)
+                val s = w * 0.26f
+                fun block(cx: Float, cy: Float) = drawRoundRect(
+                    color, topLeft = Offset(cx, cy), size = androidx.compose.ui.geometry.Size(s, s),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.03f), style = stroke,
                 )
-                drawLine(color, Offset(w * 0.26f, h * 0.54f), Offset(w * 0.4f, h * 0.54f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(w * 0.33f, h * 0.47f), Offset(w * 0.33f, h * 0.61f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, w * 0.045f, Offset(w * 0.68f, h * 0.46f))
-                drawCircle(color, w * 0.045f, Offset(w * 0.78f, h * 0.58f))
+                block(w * 0.10f, h * 0.56f)
+                block(w * 0.38f, h * 0.56f)
+                block(w * 0.38f, h * 0.24f)
+                block(w * 0.66f, h * 0.56f)
+            }
+            MapLocationId.GAME_CARD -> {
+                // カード×NPC戦: トランプカード
+                drawRoundRect(
+                    color, topLeft = Offset(w * 0.28f, h * 0.10f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.44f, h * 0.78f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.06f), style = stroke,
+                )
+                drawCircle(color, w * 0.05f, Offset(w * 0.40f, h * 0.30f))
+            }
+            MapLocationId.GAME_WALLBREAK -> {
+                // 壁破りゲーム: れんが壁
+                val bw = w * 0.42f
+                val bh = h * 0.26f
+                drawRect(color, topLeft = Offset(w * 0.06f, h * 0.20f), size = androidx.compose.ui.geometry.Size(bw, bh), style = stroke)
+                drawRect(color, topLeft = Offset(w * 0.52f, h * 0.20f), size = androidx.compose.ui.geometry.Size(bw, bh), style = stroke)
+                drawRect(color, topLeft = Offset(w * 0.27f, h * 0.52f), size = androidx.compose.ui.geometry.Size(bw, bh), style = stroke)
             }
             MapLocationId.CAVE -> {
                 val arch = androidx.compose.ui.graphics.Path().apply {

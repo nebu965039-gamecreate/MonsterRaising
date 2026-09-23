@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -52,6 +54,9 @@ import com.nebu965039.monsterraising.data.CardRecordStore
 import com.nebu965039.monsterraising.data.MiniGameStore
 import com.nebu965039.monsterraising.data.PetStore
 import com.nebu965039.monsterraising.data.careConfig
+import com.nebu965039.monsterraising.ui.common.BackgroundImages
+import com.nebu965039.monsterraising.ui.common.GAME_CENTER_BACKGROUND_PATH
+import com.nebu965039.monsterraising.ui.common.ScreenBackground
 import com.nebu965039.monsterraising.minigame.card.Attribute
 import com.nebu965039.monsterraising.minigame.card.Card
 import com.nebu965039.monsterraising.minigame.card.CardMatch
@@ -66,6 +71,8 @@ import com.nebu965039.monsterraising.ui.demo.DemoClock
 import com.nebu965039.monsterraising.ui.minigame.PlayLimitPanel
 import com.nebu965039.monsterraising.ui.minigame.rewardsText
 import com.nebu965039.monsterraising.widget.PetWidgetUpdater
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** 1 マッチが終わったあとに表示する内容。 */
 private data class MatchSummary(
@@ -155,6 +162,11 @@ fun CardScreen() {
         PetWidgetUpdater.updateAll(context)
     }
 
+    // ゲームセンターの背景(任意。3本のミニゲーム共通。8.1節)。開始前の画面にだけ敷く
+    val gameCenterBg by produceState<ImageBitmap?>(null) {
+        value = withContext(Dispatchers.IO) { BackgroundImages.load(context, GAME_CENTER_BACKGROUND_PATH) }
+    }
+
     val current = match
     val done = summary
     when {
@@ -178,10 +190,11 @@ fun CardScreen() {
             },
             onMenu = { summary = null; match = null },
         )
-        else -> Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        else -> ScreenBackground(gameCenterBg, scrimAlpha = 0.82f) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Text("カード × NPC 戦", style = MaterialTheme.typography.titleLarge)
             Text(
                 "お互いにコイン 5 枚で始め、ラウンドごとに 1〜3 枚を賭けます。カードの合計を 20 に近づけた側の勝ちで、超えると負けです。" +
@@ -228,6 +241,7 @@ fun CardScreen() {
                     progress = progressStore.load()
                 },
             )
+            }
         }
     }
 }
